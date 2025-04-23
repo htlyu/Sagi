@@ -1,0 +1,83 @@
+<p align="center">
+  <img src="assets/logo.svg" width="100"/>
+</p>
+
+<div align="center">
+
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+<!-- [![GitHub Issues](https://img.shields.io/github/issues/vercel/ofnil-agentic-rag-open.svg)](https://github.com/vercel/ofnil-agentic-rag-open/issues)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/vercel/ofnil-agentic-rag-open/pulls) -->
+
+</div>
+
+## 🎯 About
+
+Sagi is a production-ready, open-source LLM agent framework that combines advanced technologies to create powerful AI agents. It features:
+
+- 🧠 Deep-research workflow architecture, more details refers to the [doc](workflows/planning.md)
+- 🛠️ MCP (Model Context Protocol) integration, the guide of the usage of MCP refers to the [doc](mcp_server/README.md)
+- 📊 GraphRAG-powered retrieval system, HiRAG mcp server refers to the [repo](https://github.com/Dormiveglia-elf/hirag_mcp.git)
+
+## 📰 News
+
+- [2025/04] 🔥 Sigi is publicly released!
+
+## 🔜 Coming Soon
+- Interactive Web UI
+- Advanced file chunking & indexing supports
+- Improved documentation with more demos
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+1. **System Requirements**
+   - Docker and Docker Compose ([Installation Guide](dev/prerequesits.md))
+
+2. **Clone the Repository**
+   ```bash
+   git clone https://github.com/vercel/ofnil-agentic-rag-open.git
+   cd ofnil-agentic-rag-open
+   git submodule update --init --recursive  # Download MCP servers and Markify(MinerU)
+   ```
+
+3. **Environment Setup**
+   ```bash
+   cp .env.example .env
+   ```
+   Configure the following in your `.env` file:
+   - `OPENAI_API_KEY` - Your OpenAI API key
+   - `BRAVE_API_KEY` - Your [Brave Search API key](https://github.com/modelcontextprotocol/servers/tree/main/src/brave-search#getting-an-api-key)
+   - `OPENAI_BASE_URL` - (Optional) Custom endpoint URL
+
+### Installation & Running
+
+1. **Build the Docker Container**
+   ```bash
+   ./dev/setup_dc.sh
+   ```
+
+2. **Access the Container** (Choose one method)
+   - **Option A:** Use [VSCode Remote Container](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers) (Recommended). You can run `bash dev/install_vscode_extensions.sh` to install the basic plugins for the development.
+   - **Option B:** Access via terminal:
+     ```bash
+     docker exec -it "$(whoami)_chatbot_open" /bin/bash
+     ```
+
+3. **Install Dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Start CLI**
+   ```bash
+   python cli.py
+   ```
+
+## 🤝 Contributing
+
+We welcome contributions! Please feel free to submit a Pull Request.
+
+## 📄 License
+
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.

@@ -1,0 +1,43 @@
+version: '3.11'
+
+networks:
+  default:
+    driver: bridge
+    name: ${COMPOSE_PROJECT_NAME}
+
+services:
+  chatbot:
+    build:
+      context: .
+      dockerfile: dev/Dockerfile
+    container_name: "${USER}_chatbot_python"
+    volumes:
+      - .:/chatbot
+    cap_add:
+      - SYS_ADMIN
+    depends_on:
+      - markify
+    command: ["tail", "-f", "/dev/null"]  # keep docker running
+    restart: unless-stopped
+    deploy:
+      mode: global
+    ports:
+      - "8000:8000"
+
+  markify:
+    build:
+      context: .
+      dockerfile: dev/markify/Dockerfile
+    container_name: "${USER}_markify_service"
+    volumes: 
+      - ./dev/markify:/markify
+      - ./dev/markify/preprocess.sh:/root/preprocess.sh
+    entrypoint: ["/bin/sh", "/root/preprocess.sh"]  # just restart to update quickly without rebuilding
+    ports:
+      - "20926"
+    command: ["tail", "-f", "/dev/null"]  # keep docker running
+    deploy:
+      mode: global
+
+volumes:
+  markify:

@@ -1,0 +1,13 @@
+[project]
+name = "domain-specific-mcp"
+version = "0.1.0"
+description = "Python server implementing Model Context Protocol (MCP) for domain-specific prompt templates that enhance planning stage."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28.1",
+    "mcp[cli]>=1.6.0",
+]
+
+[project.scripts]
+domain_specific_mcp = "domain_specific_mcp.server:main"
