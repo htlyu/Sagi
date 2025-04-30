@@ -15,8 +15,7 @@ from autogen_ext.tools.mcp import (
 from pydantic import BaseModel
 
 from utils.load_config import load_toml_with_env_vars
-
-from .planning_group_chat import PlanningGroupChat
+from workflows.planning_group_chat import PlanningGroupChat
 
 
 class Step(BaseModel):
@@ -50,6 +49,16 @@ class MCPSessionManager:
         """close all sessions"""
         await self.exit_stack.aclose()
         self.sessions.clear()
+
+
+class StepTriageInnerResponse(BaseModel):
+    reason: str
+    answer: str
+
+
+class StepTriageResponse(BaseModel):
+    instruction_or_question: StepTriageInnerResponse
+    next_speaker: StepTriageInnerResponse
 
 
 class PlanningWorkflow:
@@ -130,6 +139,30 @@ class PlanningWorkflow:
                 api_key=config_reflection_client["api_key"],
                 response_format=ReflectionResponse,
                 max_tokens=config_reflection_client["max_tokens"],
+            )
+
+        config_step_triage_client = config["model_clients"]["step_triage_client"]
+        if "model_info" in config_step_triage_client:
+            model_info = config_step_triage_client["model_info"]
+            model_info["family"] = ModelFamily.UNKNOWN
+            model_info = ModelInfo(**model_info)
+        else:
+            model_info = None
+
+        if model_info is not None:
+            self.step_triage_model_client = OpenAIChatCompletionClient(
+                model=config_step_triage_client["model"],
+                base_url=config_step_triage_client["base_url"],
+                api_key=config_step_triage_client["api_key"],
+                response_format=StepTriageResponse,
+                model_info=model_info,
+            )
+        else:
+            self.step_triage_model_client = OpenAIChatCompletionClient(
+                model=config_step_triage_client["model"],
+                base_url=config_step_triage_client["base_url"],
+                api_key=config_step_triage_client["api_key"],
+                response_format=StepTriageResponse,
             )
 
         config_code_client = config["model_clients"]["code_client"]
@@ -249,6 +282,7 @@ class PlanningWorkflow:
             planning_model_client=self.planning_model_client,
             reflection_model_client=self.reflection_model_client,
             domain_specific_agent=domain_specific_agent,  # Add this parameter
+            step_triage_model_client=self.step_triage_model_client,
         )
         return self
 
