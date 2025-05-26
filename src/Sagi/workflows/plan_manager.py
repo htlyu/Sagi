@@ -5,6 +5,7 @@ from typing import Dict, List, Literal, Optional, Tuple
 
 from autogen_agentchat.messages import BaseAgentEvent, BaseChatMessage, BaseMessage
 from pydantic import BaseModel, Field
+from Sagi.utils.prompt_templates import PROMPT_TEMPLATES
 
 
 class Step(BaseModel):
@@ -595,6 +596,16 @@ class PlanManager:
             self._current_plan.add_reflection_to_step(step_id, reflection)
         else:
             raise ValueError("No running plan")
+        
+    def update_shared_context(self, step_id: str, summary: str) -> None:
+        """
+        Delegate the summary for the specified step to the Plan.update_shared_context method.
+        """
+        if self._current_plan:
+            # Forward the call to Plan.update_shared_context
+            self._current_plan.update_shared_context(step_id, summary)
+        else:
+            raise ValueError("No active plan to update shared_context")
 
     def get_messages_by_step_id(
         self, step_id: str
@@ -788,3 +799,37 @@ class PlanManager:
         """
         self._current_plan = None
         self._plan_history = PlanHistory(plan_history=[])
+
+    def build_prompt_for_step(self, step_id: str, agent_role: str) -> str:
+        plan = self._current_plan
+        if plan is None:
+            raise ValueError("No active plan")
+        step = plan.steps.get(step_id)
+        if not step:
+            raise ValueError(f"Step '{step_id}' not found")
+
+        # 1) Format shared_context summaries
+        shared_items = [f"{gid}: {text}" for gid, text in plan.shared_context.items()]
+        shared_summaries = "\n".join(shared_items) if shared_items else "No previous summaries."
+
+        # 2) Select template
+        template = PROMPT_TEMPLATES.get(agent_role)
+        if not template:
+            template = """
+    Completed summaries:
+    {shared_summaries}
+
+    Current sub-task:
+    {step_content}
+
+    Your task:
+    - Complete "{step_content}" using the above summaries.
+    """.strip()
+
+        # 3) Fill placeholders
+        prompt = template.format(
+            shared_summaries=shared_summaries,
+            step_content=step.content
+        )
+        return prompt
+

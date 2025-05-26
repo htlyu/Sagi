@@ -217,11 +217,15 @@ class PlanningOrchestrator(BaseGroupChatManager):
         if message.agent_response.inner_messages is not None:
             for inner_message in message.agent_response.inner_messages:
                 delta.append(inner_message)
-        self._plan_manager.add_message_to_step(
-            step_id=self._plan_manager.get_current_step()[0],
-            message=message.agent_response.chat_message,
-        )
-        delta.append(message.agent_response.chat_message)
+
+        # Only record messages sent by external agents (not the Orchestrator)
+        chat_msg = message.agent_response.chat_message
+        if chat_msg.source != self._name:
+            self._plan_manager.add_message_to_step(
+                step_id=self._plan_manager.get_current_step()[0],
+                message=chat_msg,
+            )
+            delta.append(chat_msg)
 
         if self._termination_condition is not None:
             stop_message = await self._termination_condition(delta)
@@ -402,6 +406,8 @@ class PlanningOrchestrator(BaseGroupChatManager):
                 source="StepCompletionNotifier",
             )
             self._plan_manager.add_reflection_to_step(current_step_id, reason)
+            # Write this step’s result summary into shared_context
+            self._plan_manager.update_shared_context(current_step_id, reason)
             await self.publish_message(
                 GroupChatMessage(message=step_completion_message),
                 topic_id=DefaultTopicId(type=self._output_topic_type),
@@ -485,16 +491,48 @@ class PlanningOrchestrator(BaseGroupChatManager):
         )
         step_triage = json.loads(step_triage_response)
 
-        # Broadcast the next step
+        # 1) Extract the next speaker from the triage result as agent_role
+        agent_role = step_triage["next_speaker"]["answer"]  
+
+        # 2) Retrieve the instruction from the triage result
         instruction_or_question = step_triage["instruction_or_question"]["answer"]
+
+        # 3) Build the refined context by passing in step_id and agent_role
+        refined_context = self._plan_manager.build_prompt_for_step(
+            current_step_id,
+            agent_role
+        )
+
+        # 4) Assemble the final prompt
+        full_prompt = (
+            f"{refined_context}\n\n"
+            f"=== Instruction ===\n{instruction_or_question}"
+        )
+
         message = TextMessage(
-            content=instruction_or_question,
+            content=full_prompt,
             source=self._name,
         )
         self._plan_manager.add_message_to_step(
             step_id=current_step_id,
             message=message,
         )
+
+        # 下面保持原有逻辑，用 triage 的 instruction 触发工具执行
+        next_speaker = step_triage["next_speaker"]["answer"]
+        logging.info(f"Next Speaker: {next_speaker}")
+
+        step_running_message = TextMessage(
+            content=json.dumps(
+                {
+                    "tool": next_speaker,
+                    "instruction": instruction_or_question,
+                },
+                indent=4,
+            ),
+            source="ToolCaller",
+        )
+
 
         next_speaker = step_triage["next_speaker"]["answer"]
         logging.info(f"Next Speaker: {next_speaker}")
