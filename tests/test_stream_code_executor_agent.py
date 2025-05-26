@@ -11,7 +11,10 @@ from autogen_core.models import FunctionExecutionResultMessage
 from autogen_ext.models.openai import OpenAIChatCompletionClient
 from dotenv import load_dotenv
 
-from Sagi.tools.stream_code_executor.stream_code_executor import CodeFileMessage
+from Sagi.tools.stream_code_executor.stream_code_executor import (
+    CodeFileMessage,
+    CustomCommandLineCodeResult,
+)
 from Sagi.tools.stream_code_executor.stream_code_executor_agent import (
     CodeExecutionEvent,
     StreamCodeExecutorAgent,
@@ -52,6 +55,7 @@ echo "Hello World"
 
         elif isinstance(result, CodeFileMessage):
             assert result.code_file.endswith(".sh")
+        elif isinstance(result, CustomCommandLineCodeResult):
             assert result.command.startswith("sh")
 
 
@@ -86,6 +90,7 @@ print("Hello World")
 
         elif isinstance(result, CodeFileMessage):
             assert result.code_file.endswith(".py")
+        elif isinstance(result, CustomCommandLineCodeResult):
             assert result.command.split(" ")[0].endswith(("python", "python3"))
 
 

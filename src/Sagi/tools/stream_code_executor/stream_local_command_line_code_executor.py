@@ -1,5 +1,7 @@
 import asyncio
+import json
 import os
+import subprocess
 import sys
 from hashlib import sha256
 from pathlib import Path
@@ -22,7 +24,6 @@ from autogen_core.code_executor import (
 )
 from autogen_ext.code_executors._common import (
     PYTHON_VARIANTS,
-    CommandLineCodeResult,
     get_file_name_from_content,
     lang_to_cmd,
     silence_pip,
@@ -31,6 +32,7 @@ from autogen_ext.code_executors.local import A, LocalCommandLineCodeExecutor
 
 from Sagi.tools.stream_code_executor.stream_code_executor import (
     CodeFileMessage,
+    CustomCommandLineCodeResult,
     StreamCodeExecutor,
 )
 
@@ -62,7 +64,7 @@ class StreamLocalCommandLineCodeExecutor(
 
     async def execute_code_blocks_stream(
         self, code_blocks: List[CodeBlock], cancellation_token: CancellationToken
-    ) -> AsyncGenerator[CodeFileMessage | CommandLineCodeResult, None]:
+    ) -> AsyncGenerator[CodeFileMessage | CustomCommandLineCodeResult, None]:
         if not self._setup_functions_complete:
             await self._setup_functions(cancellation_token)
 
@@ -73,7 +75,7 @@ class StreamLocalCommandLineCodeExecutor(
 
     async def _execute_code_dont_check_setup_stream(
         self, code_blocks: List[CodeBlock], cancellation_token: CancellationToken
-    ) -> AsyncGenerator[CodeFileMessage | CommandLineCodeResult, None]:
+    ) -> AsyncGenerator[CodeFileMessage | CustomCommandLineCodeResult, None]:
         logs_all: str = ""
         file_names: List[Path] = []
         exitcode = 0
@@ -99,10 +101,14 @@ class StreamLocalCommandLineCodeExecutor(
             try:
                 filename = get_file_name_from_content(code, self.work_dir)
             except ValueError:
-                yield CommandLineCodeResult(
+                yield CustomCommandLineCodeResult(
                     exit_code=1,
                     output="Filename is not in the workspace",
                     code_file=None,
+                    command="",
+                    hostname="",
+                    user="",
+                    pwd="",
                 )
                 return
 
@@ -161,11 +167,17 @@ class StreamLocalCommandLineCodeExecutor(
                     extra_args = [str(written_file.absolute())]
 
             command = " ".join([program] + extra_args)
+            content_json = {
+                "code_file": str(self.work_dir / filename),
+                # "command": command,
+                "code_block": code_block.code,
+                "code_block_language": code_block.language,
+            }
             yield CodeFileMessage(
-                content=f"Code file: {str(self.work_dir / filename)}\nCommand: {command}",
+                content=json.dumps(content_json),
                 code_file=str(self.work_dir / filename),
-                command=command,
-                source="stream_local_command_line_code_executor",
+                # command=command,
+                source=self.__class__.__name__,
             )
             # Create a subprocess and run
             task = asyncio.create_task(
@@ -209,7 +221,22 @@ class StreamLocalCommandLineCodeExecutor(
             if exitcode != 0:
                 break
 
+        hostname = subprocess.check_output("hostname").decode().strip()
+        user = subprocess.check_output("whoami").decode().strip()
+        pwd = (
+            subprocess.check_output("pwd")
+            .decode()
+            .strip()
+            .replace(os.path.expanduser("~"), "~")
+        )
+
         code_file = str(file_names[0]) if file_names else None
-        yield CommandLineCodeResult(
-            exit_code=exitcode, output=logs_all, code_file=code_file
+        yield CustomCommandLineCodeResult(
+            exit_code=exitcode,
+            output=logs_all,
+            code_file=code_file,
+            command=command,
+            hostname=hostname,
+            user=user,
+            pwd=pwd,
         )
