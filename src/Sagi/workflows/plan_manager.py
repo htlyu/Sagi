@@ -4,8 +4,12 @@ from collections import OrderedDict
 from typing import Dict, List, Literal, Optional, Tuple
 
 from autogen_agentchat.messages import BaseAgentEvent, BaseChatMessage, BaseMessage
+from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
+
 from Sagi.utils.prompt_templates import PROMPT_TEMPLATES
+
+_llm_client = AsyncOpenAI()
 
 
 class Step(BaseModel):
@@ -596,7 +600,7 @@ class PlanManager:
             self._current_plan.add_reflection_to_step(step_id, reflection)
         else:
             raise ValueError("No running plan")
-        
+
     def update_shared_context(self, step_id: str, summary: str) -> None:
         """
         Delegate the summary for the specified step to the Plan.update_shared_context method.
@@ -800,7 +804,45 @@ class PlanManager:
         self._current_plan = None
         self._plan_history = PlanHistory(plan_history=[])
 
-    def build_prompt_for_step(self, step_id: str, agent_role: str) -> str:
+    async def filter_summaries_with_llm(
+        self, summaries: list[str], task: str
+    ) -> list[str]:
+        """
+        Invoke the LLM to return the subset of summary texts most relevant to the current task.
+        """
+        # Construct the prompt used for filtering
+        numbered = "\n".join(f"{i+1}. {s}" for i, s in enumerate(summaries))
+        prompt = f"""
+Below are previous result summaries, each numbered:
+{numbered}
+
+Current Task:
+{task}
+
+Question: Which of the above summaries are directly relevant to executing this task?
+Answer with a JSON array of numbers, e.g. [1,4].
+"""
+
+        resp = await _llm_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=2000,
+            temperature=0.0,
+        )
+        text = resp.choices[0].message.content.strip()
+
+        try:
+            chosen = json.loads(text)
+        except json.JSONDecodeError:
+            return summaries
+
+        return [
+            summaries[i - 1]
+            for i in chosen
+            if isinstance(i, int) and 1 <= i <= len(summaries)
+        ]
+
+    async def build_prompt_for_step(self, step_id: str, agent_role: str) -> str:
         plan = self._current_plan
         if plan is None:
             raise ValueError("No active plan")
@@ -808,28 +850,35 @@ class PlanManager:
         if not step:
             raise ValueError(f"Step '{step_id}' not found")
 
-        # 1) Format shared_context summaries
-        shared_items = [f"{gid}: {text}" for gid, text in plan.shared_context.items()]
-        shared_summaries = "\n".join(shared_items) if shared_items else "No previous summaries."
+        # Retrieve all historical summary texts
+        all_summaries = list(plan.shared_context.values())
 
-        # 2) Select template
-        template = PROMPT_TEMPLATES.get(agent_role)
-        if not template:
-            template = """
-    Completed summaries:
-    {shared_summaries}
+        # Perform on-the-fly filtering to extract the most relevant summaries
+        relevant = await self.filter_summaries_with_llm(all_summaries, step.content)
 
-    Current sub-task:
-    {step_content}
+        # Construct the Previous Results section
+        if relevant:
+            items = [f"- {s}" for s in relevant]
+            shared_section = "Previous Results:\n" + "\n".join(items)
+        else:
+            shared_section = "Previous Results:\n- (none)\n"
 
-    Your task:
-    - Complete "{step_content}" using the above summaries.
-    """.strip()
-
-        # 3) Fill placeholders
-        prompt = template.format(
-            shared_summaries=shared_summaries,
-            step_content=step.content
+        # Construct the Current Sub-Task section
+        step_section = (
+            f"Current Sub-Task (group {step.group_id}, step {step.step_id}):\n"
+            f"{step.content}\n"
         )
-        return prompt
 
+        # Fill in the final template
+        template = (
+            PROMPT_TEMPLATES.get(agent_role)
+            or """\
+{shared_section}
+
+{step_section}
+
+Your task:
+- Execute using only the above summaries and sub-task content.
+"""
+        )
+        return template.format(shared_section=shared_section, step_section=step_section)

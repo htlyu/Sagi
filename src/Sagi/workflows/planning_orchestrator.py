@@ -492,21 +492,19 @@ class PlanningOrchestrator(BaseGroupChatManager):
         step_triage = json.loads(step_triage_response)
 
         # 1) Extract the next speaker from the triage result as agent_role
-        agent_role = step_triage["next_speaker"]["answer"]  
+        agent_role = step_triage["next_speaker"]["answer"]
 
         # 2) Retrieve the instruction from the triage result
         instruction_or_question = step_triage["instruction_or_question"]["answer"]
 
         # 3) Build the refined context by passing in step_id and agent_role
-        refined_context = self._plan_manager.build_prompt_for_step(
-            current_step_id,
-            agent_role
+        refined_context = await self._plan_manager.build_prompt_for_step(
+            current_step_id, agent_role
         )
 
         # 4) Assemble the final prompt
         full_prompt = (
-            f"{refined_context}\n\n"
-            f"=== Instruction ===\n{instruction_or_question}"
+            f"{refined_context}\n\n" f"=== Instruction ===\n{instruction_or_question}"
         )
 
         message = TextMessage(
@@ -532,7 +530,6 @@ class PlanningOrchestrator(BaseGroupChatManager):
             ),
             source="ToolCaller",
         )
-
 
         next_speaker = step_triage["next_speaker"]["answer"]
         logging.info(f"Next Speaker: {next_speaker}")

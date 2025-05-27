@@ -43,7 +43,7 @@ class Database:
 
     async def save_state(self, session_id: str, state: dict):
         assert self.pool, "Database not initialized. Call init() first."
-        state_json = json.dumps(state)
+        state_json = json.dumps(state, ensure_ascii=True)
         async with self.pool.acquire() as conn:
             await conn.execute(
                 """
