@@ -516,7 +516,7 @@ class PlanningOrchestrator(BaseGroupChatManager):
             message=message,
         )
 
-        # 下面保持原有逻辑，用 triage 的 instruction 触发工具执行
+        # maintain the original logic, using the triage instruction to trigger the tool execution.
         next_speaker = step_triage["next_speaker"]["answer"]
         logging.info(f"Next Speaker: {next_speaker}")
 
@@ -531,19 +531,6 @@ class PlanningOrchestrator(BaseGroupChatManager):
             source="ToolCaller",
         )
 
-        next_speaker = step_triage["next_speaker"]["answer"]
-        logging.info(f"Next Speaker: {next_speaker}")
-
-        step_running_message = TextMessage(
-            content=json.dumps(
-                {
-                    "tool": next_speaker,
-                    "instruction": instruction_or_question,
-                },
-                indent=4,
-            ),
-            source="ToolCaller",
-        )
         # Log it to the output topic.
         await self.publish_message(
             GroupChatMessage(message=step_running_message),

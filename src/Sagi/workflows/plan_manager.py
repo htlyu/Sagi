@@ -7,7 +7,12 @@ from autogen_agentchat.messages import BaseAgentEvent, BaseChatMessage, BaseMess
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
 
-from Sagi.utils.prompt_templates import PROMPT_TEMPLATES
+from Sagi.utils.prompt_templates import (
+    DEFAULT_PROMPT,
+    PROMPT_TEMPLATES,
+    build_shared_section,
+    build_step_section,
+)
 
 _llm_client = AsyncOpenAI()
 
@@ -856,29 +861,9 @@ Answer with a JSON array of numbers, e.g. [1,4].
         # Perform on-the-fly filtering to extract the most relevant summaries
         relevant = await self.filter_summaries_with_llm(all_summaries, step.content)
 
-        # Construct the Previous Results section
-        if relevant:
-            items = [f"- {s}" for s in relevant]
-            shared_section = "Previous Results:\n" + "\n".join(items)
-        else:
-            shared_section = "Previous Results:\n- (none)\n"
-
-        # Construct the Current Sub-Task section
-        step_section = (
-            f"Current Sub-Task (group {step.group_id}, step {step.step_id}):\n"
-            f"{step.content}\n"
-        )
+        shared_section = build_shared_section(relevant)
+        step_section = build_step_section(step)
 
         # Fill in the final template
-        template = (
-            PROMPT_TEMPLATES.get(agent_role)
-            or """\
-{shared_section}
-
-{step_section}
-
-Your task:
-- Execute using only the above summaries and sub-task content.
-"""
-        )
+        template = PROMPT_TEMPLATES.get(agent_role, DEFAULT_PROMPT)
         return template.format(shared_section=shared_section, step_section=step_section)
