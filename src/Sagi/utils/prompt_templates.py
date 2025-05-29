@@ -46,3 +46,18 @@ def build_step_section(step):
         f"Current Sub-Task (group {step.group_id}, step {step.step_id}):\n"
         f"{step.content}\n"
     )
+
+
+def build_final_prompt(refined_context, instruction_or_question):
+    return f"{refined_context}\n\n" f"=== Instruction ===\n{instruction_or_question}"
+
+
+def build_filter_prompt(numbered: str, task: str) -> str:
+    return (
+        f"Below are previous result summaries, each numbered:\n"
+        f"{numbered}\n\n"
+        f"Current Task:\n"
+        f"{task}\n\n"
+        f"Question: Which of the above summaries are directly relevant to executing this task?\n"
+        f"Answer with a JSON array of numbers, e.g. [1,4]."
+    )

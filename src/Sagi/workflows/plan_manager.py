@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from Sagi.utils.prompt_templates import (
     DEFAULT_PROMPT,
     PROMPT_TEMPLATES,
+    build_filter_prompt,
     build_shared_section,
     build_step_section,
 )
@@ -817,24 +818,29 @@ class PlanManager:
         """
         # Construct the prompt used for filtering
         numbered = "\n".join(f"{i+1}. {s}" for i, s in enumerate(summaries))
-        prompt = f"""
-Below are previous result summaries, each numbered:
-{numbered}
+        filter_prompt = build_filter_prompt(numbered, task)
 
-Current Task:
-{task}
-
-Question: Which of the above summaries are directly relevant to executing this task?
-Answer with a JSON array of numbers, e.g. [1,4].
-"""
-
-        resp = await _llm_client.chat.completions.create(
+        response = await _llm_client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
+            messages=[{"role": "user", "content": filter_prompt}],
             max_tokens=2000,
             temperature=0.0,
         )
-        text = resp.choices[0].message.content.strip()
+        text = response.choices[0].message.content.strip()
+
+        # model_client = OpenAIChatCompletionClient(
+        #     model="gpt-4o-mini",
+        #     base_url=os.getenv("OPENAI_BASE_URL"),
+        #     api_key=os.getenv("OPENAI_API_KEY"),
+        #     max_tokens=2000,
+        # )
+
+        # response = model_client.chat.completions.create(
+        #     messages=[{"role": "user", "content": filter_prompt}],
+        #     temperature=0.0,
+        #     stream=False,
+        # )
+        # text = response.choices[0].message.content.strip()
 
         try:
             chosen = json.loads(text)

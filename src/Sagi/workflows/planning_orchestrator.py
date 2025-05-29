@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 import re
 from typing import Any, Dict, List, Mapping
 
@@ -42,6 +43,7 @@ from autogen_core.models import (
     SystemMessage,
     UserMessage,
 )
+from autogen_ext.models.openai import OpenAIChatCompletionClient
 from pydantic import BaseModel, Field
 
 from Sagi.tools.stream_code_executor.stream_code_executor import CodeFileMessage
@@ -51,6 +53,7 @@ from Sagi.utils.prompt import (
     get_reflection_step_completion_prompt,
     get_step_triage_prompt,
 )
+from Sagi.utils.prompt_templates import build_final_prompt
 from Sagi.workflows.plan_manager import PlanManager
 
 trace_logger = logging.getLogger(TRACE_LOGGER_NAME)
@@ -372,6 +375,42 @@ class PlanningOrchestrator(BaseGroupChatManager):
                 context.append(UserMessage(content=m.content, source=m.source))
         return context
 
+    async def _generate_step_summary(
+        self,
+        step: str,
+        context: List[UserMessage],
+        cancellation_token: CancellationToken,
+    ) -> str:
+
+        model_client = OpenAIChatCompletionClient(
+            model="gpt-4o-mini",
+            base_url=os.getenv("OPENAI_BASE_URL"),
+            api_key=os.getenv("OPENAI_API_KEY"),
+            max_tokens=2000,
+        )
+
+        # System prompt to instruct the model
+        system_prompt = SystemMessage(
+            content=(
+                "You are an assistant that distills execution context into a concise result. "
+                "Based on the context below, provide a single-paragraph summary of this step's execution."
+            )
+        )
+
+        # Prepare the user payload: include the step and the list of context messages
+        payload = {"step": step, "context": [message.content for message in context]}
+        user_prompt = UserMessage(
+            content=json.dumps(payload, ensure_ascii=False, indent=4), source="user"
+        )
+
+        # Call the model and get the completion
+        result = await model_client.create(
+            messages=[system_prompt, user_prompt], cancellation_token=cancellation_token
+        )
+
+        # Return the trimmed summary
+        return result.content.strip()
+
     async def _orchestrate_step(self, cancellation_token: CancellationToken) -> None:
         current_step = self._plan_manager.get_current_step()
         if current_step is None:
@@ -407,7 +446,10 @@ class PlanningOrchestrator(BaseGroupChatManager):
             )
             self._plan_manager.add_reflection_to_step(current_step_id, reason)
             # Write this step’s result summary into shared_context
-            self._plan_manager.update_shared_context(current_step_id, reason)
+            summary = await self._generate_step_summary(
+                current_step_content, filtered_context, cancellation_token
+            )
+            self._plan_manager.update_shared_context(current_step_id, summary)
             await self.publish_message(
                 GroupChatMessage(message=step_completion_message),
                 topic_id=DefaultTopicId(type=self._output_topic_type),
@@ -503,12 +545,15 @@ class PlanningOrchestrator(BaseGroupChatManager):
         )
 
         # 4) Assemble the final prompt
-        full_prompt = (
+
+        final_prompt = build_final_prompt(refined_context, instruction_or_question)
+
+        final_prompt = (
             f"{refined_context}\n\n" f"=== Instruction ===\n{instruction_or_question}"
         )
 
         message = TextMessage(
-            content=full_prompt,
+            content=final_prompt,
             source=self._name,
         )
         self._plan_manager.add_message_to_step(
