@@ -1,11 +1,14 @@
 import json
+import os
 import uuid
 from collections import OrderedDict
 from typing import Dict, List, Literal, Optional, Tuple
 
 from autogen_agentchat.messages import BaseAgentEvent, BaseChatMessage, BaseMessage
-from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
+from autogen_ext.models.openai import OpenAIChatCompletionClient
+from autogen_core.models import UserMessage
+
 
 from Sagi.utils.prompt_templates import (
     DEFAULT_PROMPT,
@@ -14,8 +17,6 @@ from Sagi.utils.prompt_templates import (
     build_shared_section,
     build_step_section,
 )
-
-_llm_client = AsyncOpenAI()
 
 
 class Step(BaseModel):
@@ -820,27 +821,19 @@ class PlanManager:
         numbered = "\n".join(f"{i+1}. {s}" for i, s in enumerate(summaries))
         filter_prompt = build_filter_prompt(numbered, task)
 
-        response = await _llm_client.chat.completions.create(
+        model_client = OpenAIChatCompletionClient(
             model="gpt-4o-mini",
-            messages=[{"role": "user", "content": filter_prompt}],
+            base_url=os.getenv("OPENAI_BASE_URL"),
+            api_key=os.getenv("OPENAI_API_KEY"),
             max_tokens=2000,
-            temperature=0.0,
         )
-        text = response.choices[0].message.content.strip()
 
-        # model_client = OpenAIChatCompletionClient(
-        #     model="gpt-4o-mini",
-        #     base_url=os.getenv("OPENAI_BASE_URL"),
-        #     api_key=os.getenv("OPENAI_API_KEY"),
-        #     max_tokens=2000,
-        # )
+        # Build messages: instruct the model to output strict JSON only
+        messages = [UserMessage(content=filter_prompt, source="user")]
 
-        # response = model_client.chat.completions.create(
-        #     messages=[{"role": "user", "content": filter_prompt}],
-        #     temperature=0.0,
-        #     stream=False,
-        # )
-        # text = response.choices[0].message.content.strip()
+        # Send the request and receive the full reply
+        result = await model_client.create(messages)
+        text = result.content.strip()
 
         try:
             chosen = json.loads(text)
