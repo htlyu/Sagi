@@ -227,7 +227,6 @@ class PlanningOrchestrator(BaseGroupChatManager):
                 )
                 await self._output_message_queue.put(inner_message)
 
-
         # Only record messages sent by external agents (not the Orchestrator)
         chat_msg = message.agent_response.chat_message
         if chat_msg.source != self._name:
