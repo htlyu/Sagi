@@ -131,13 +131,6 @@ The answer should be phrased as if you were speaking to the user.
     return template.format(task=task)
 
 
-
-
-
-
-
-
-
 def get_data_collector_prompt(
     *, shared_section: str, step_section: str, step_content: str
 ) -> str:
@@ -166,9 +159,7 @@ def get_data_collector_prompt(
     )
 
 
-def get_code_executor_prompt(
-    *, shared_section: str, step_section: str
-) -> str:
+def get_code_executor_prompt(*, shared_section: str, step_section: str) -> str:
     """Generates a prompt for the CodeExecutor agent role.
 
     Args:
@@ -192,9 +183,7 @@ def get_code_executor_prompt(
     )
 
 
-def get_default_execution_prompt(
-    *, shared_section: str, step_section: str
-) -> str:
+def get_default_execution_prompt(*, shared_section: str, step_section: str) -> str:
     """Generates the default execution prompt for other agent roles.
 
     Args:
@@ -213,14 +202,6 @@ def get_default_execution_prompt(
         shared_section=shared_section,
         step_section=step_section,
     )
-
-
-
-
-
-
-
-
 
 
 def get_previous_results_section(*, relevant_summaries: list[str]) -> str:
@@ -257,7 +238,9 @@ def get_current_subtask_section(*, step) -> str:
     )
 
 
-def get_instruction_prompt(*, refined_context: str, instruction_or_question: str) -> str:
+def get_instruction_prompt(
+    *, refined_context: str, instruction_or_question: str
+) -> str:
     """Combines refined context with the instruction or question into a single prompt.
 
     Args:

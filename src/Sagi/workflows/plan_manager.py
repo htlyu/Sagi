@@ -1,16 +1,20 @@
 import json
-import os
 import uuid
 from collections import OrderedDict
 from typing import Dict, List, Literal, Optional, Tuple
 
-from Sagi.utils.prompt import get_code_executor_prompt, get_current_subtask_section, get_data_collector_prompt, get_default_execution_prompt, get_previous_results_section, get_relevance_filter_prompt
 from autogen_agentchat.messages import BaseAgentEvent, BaseChatMessage, BaseMessage
-from pydantic import BaseModel, Field
-from autogen_ext.models.openai import OpenAIChatCompletionClient
 from autogen_core.models import UserMessage
+from pydantic import BaseModel, Field
 
-
+from Sagi.utils.prompt import (
+    get_code_executor_prompt,
+    get_current_subtask_section,
+    get_data_collector_prompt,
+    get_default_execution_prompt,
+    get_previous_results_section,
+    get_relevance_filter_prompt,
+)
 
 
 class Step(BaseModel):
@@ -835,18 +839,13 @@ class PlanManager:
         numbered = "\n".join(f"{i+1}. {s}" for i, s in enumerate(summaries))
         filter_prompt = get_relevance_filter_prompt(numbered=numbered, task=task)
 
-        model_client = OpenAIChatCompletionClient(
-            model="gpt-4o-mini",
-            base_url=os.getenv("OPENAI_BASE_URL"),
-            api_key=os.getenv("OPENAI_API_KEY"),
-            max_tokens=2000,
-        )
-
         # Build messages: instruct the model to output strict JSON only
         messages = [UserMessage(content=filter_prompt, source="user")]
 
         # Send the request and receive the full reply
-        result = await model_client.create(messages)
+        from Sagi.workflows.planning import PlanningWorkflow
+
+        result = await PlanningWorkflow.orchestrator_model_client.create(messages)
         text = result.content.strip()
 
         try:
