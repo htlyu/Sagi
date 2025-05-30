@@ -2,7 +2,8 @@ import json
 from typing import Any, Mapping, Optional
 
 import asyncpg
-from autogen_agentchat.teams import RoundRobinGroupChat
+
+from Sagi.workflows.planning_group_chat import PlanningGroupChat
 
 CREATE_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS session_states (
@@ -35,7 +36,7 @@ class Database:
             )
         return [r["session_id"] for r in rows]
 
-    async def load_team_state(self, session_id: str, team: RoundRobinGroupChat) -> None:
+    async def load_team_state(self, session_id: str, team: PlanningGroupChat) -> None:
         """
         Load state from the database and pass it to team.load_state(state).
         If the format is incompatible, delete the old record and keep the team in its default empty state.
@@ -62,7 +63,7 @@ class Database:
                     session_id,
                 )
 
-    async def save_team_state(self, session_id: str, team: RoundRobinGroupChat) -> None:
+    async def save_team_state(self, session_id: str, team: PlanningGroupChat) -> None:
 
         assert (
             self.pool
