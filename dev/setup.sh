@@ -1,31 +1,48 @@
 #!/bin/bash
 
-root_dir=$(dirname $(dirname $(realpath $0)))
-IMAGE_NAME="registry-intl.cn-hongkong.aliyuncs.com/flavius/chatbot-python:latest"
+# Set default values for the directories if not provided
+if [ -z "$SAGI_DIR" ]; then
+    echo "SAGI_DIR is not set, using default path $(pwd)"
+    SAGI_DIR="$(pwd)"
+    export SAGI_DIR=${SAGI_DIR}
+fi
 
-build_docker_image() {
-    debug=""
-    # uncomment to show progress in plain mode for debugging
-    debug="--progress=plain"
+if [ -z "$DOCKER_SOCKET_PATH" ]; then
+    echo "DOCKER_SOCKET_PATH is not set, using default path /var/run/docker.sock"
+    DOCKER_SOCKET_PATH="/var/run/docker.sock"
+    export DOCKER_SOCKET_PATH=${DOCKER_SOCKET_PATH}
+fi
 
-    # clear old image if exists
-    docker image rmi ${IMAGE_NAME} 2>/dev/null || true
 
-    # build new image
-    docker buildx build ${debug} -t ${IMAGE_NAME} ${root_dir} -f ${root_dir}/dev/Dockerfile
-}
 
-run_docker_container() {
-    username=$(whoami)
-    echo mounting $root_dir to /chatbot in container
-    docker run -itd --rm --name ${username}_chatbot_open \
-        -v "$root_dir:/chatbot" \
-        --cap-add=SYS_ADMIN \
-        ${IMAGE_NAME}
-    echo you may run \"docker exec -it "${username}_chatbot_open" /bin/bash\" to enter the container
+export USERNAME=$(whoami)
+CONTAINER_NAME_1="${USERNAME}_sagi-dev"
+CONTAINER_NAME_2="${USERNAME}_markify_service"
+COMPOSE_PROJECT_NAME="${USERNAME}_sagi-dev-dc"
+
+
+start_docker_compose() {
+    # stop all containers if they are running
+    docker stop ${CONTAINER_NAME_1} 2>/dev/null || true
+    docker stop ${CONTAINER_NAME_2} 2>/dev/null || true
+
+    # remove all containers
+    docker rm ${CONTAINER_NAME_1} 2>/dev/null || true
+    docker rm ${CONTAINER_NAME_2} 2>/dev/null || true
+
+    # start docker-compose
+    echo "Starting docker-compose with project name: ${COMPOSE_PROJECT_NAME}..."
+    docker-compose -f docker-compose.yml -p ${COMPOSE_PROJECT_NAME} up -d --build
+    if [ $? -ne 0 ]; then
+        echo "docker-compose failed to start. Please check the logs for more information."
+        exit 1
+    fi
+    echo "docker-compose started successfully."
+
+    # print container names
+    echo "You may run \"docker exec -it ${CONTAINER_NAME_1} /bin/bash\" to enter the sagi container"
 }
 
 set -e
 ### on host:
-build_docker_image
-run_docker_container
+start_docker_compose
