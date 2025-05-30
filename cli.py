@@ -144,6 +144,9 @@ async def main_cmd(args: argparse.Namespace):
     try:
         await db.load_team_state(session_id, team)
         logging.info(f"Loaded DB state for session {session_id}")
+    except KeyError:
+        logging.info(f"No DB state for session {session_id}; starting fresh")
+        await workflow.team.reset()
     except Exception as e:
         logging.error(f"DB load error: {e}")
 

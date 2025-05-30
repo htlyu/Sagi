@@ -46,7 +46,9 @@ from autogen_core.models import (
 from autogen_ext.models.openai import OpenAIChatCompletionClient
 from pydantic import BaseModel, Field
 
-from Sagi.tools.stream_code_executor.stream_code_executor import CodeFileMessage
+from Sagi.tools.stream_code_executor.stream_code_executor import (
+    CodeFileMessage,
+)
 from Sagi.utils.prompt import (
     get_appended_plan_prompt,
     get_final_answer_prompt,
@@ -220,6 +222,11 @@ class PlanningOrchestrator(BaseGroupChatManager):
         if message.agent_response.inner_messages is not None:
             for inner_message in message.agent_response.inner_messages:
                 delta.append(inner_message)
+                inner_message.metadata["step_id"] = (
+                    self._plan_manager.get_current_step()[0]
+                )
+                await self._output_message_queue.put(inner_message)
+
 
         # Only record messages sent by external agents (not the Orchestrator)
         chat_msg = message.agent_response.chat_message
@@ -229,6 +236,17 @@ class PlanningOrchestrator(BaseGroupChatManager):
                 message=chat_msg,
             )
             delta.append(chat_msg)
+
+        # For web app
+        plan_state = {
+            k: v.state for k, v in self._plan_manager._current_plan.steps.items()
+        }
+        plan_state_message = TextMessage(
+            content=json.dumps(plan_state, indent=4),
+            source="PlanState",
+            metadata={"step_id": self._plan_manager.get_current_step()[0]},
+        )
+        await self._output_message_queue.put(plan_state_message)
 
         if self._termination_condition is not None:
             stop_message = await self._termination_condition(delta)
@@ -470,8 +488,13 @@ class PlanningOrchestrator(BaseGroupChatManager):
         # Initialize or increment the counter
         if self._plan_manager.get_step_progress_counter(current_step_id) == 0:
             self._plan_manager.set_step_state(current_step_id, "in_progress")
+            step_start_json = {
+                "stepId": current_step_id,
+                "content": current_step_content,
+                "totalSteps": self._plan_manager.get_total_steps_current_plan(),
+            }
             step_start_message = TextMessage(
-                content=current_step_content,
+                content=json.dumps(step_start_json, indent=4),
                 source="NewStepNotifier",
             )
             await self.publish_message(
@@ -570,6 +593,7 @@ class PlanningOrchestrator(BaseGroupChatManager):
                 {
                     "tool": next_speaker,
                     "instruction": instruction_or_question,
+                    "stepId": current_step_id,
                 },
                 indent=4,
             ),
@@ -608,19 +632,15 @@ class PlanningOrchestrator(BaseGroupChatManager):
     ) -> None:
         request_user_feedback_prompt = f"Please review the plan above and provide modification suggestions. Type 'y' if the plan is acceptable."
 
-        await self.publish_message(
-            GroupChatMessage(
-                message=TextMessage(
-                    content=request_user_feedback_prompt, source="UserProxyAgent"
-                )
-            ),
-            topic_id=DefaultTopicId(type=self._output_topic_type),
-        )
         plan_to_user_dict = {}
         plan_to_user_dict["steps"] = (
             self._plan_manager.get_current_plan_contents().copy()
         )
-        plan_to_user_dict["request_user_feedback_prompt"] = request_user_feedback_prompt
+        # plan_to_user_dict["request_user_feedback_prompt"] = request_user_feedback_prompt
+        # Generate the feedback
+        plan_to_user_dict["posFeedback"] = "Start to research"
+        plan_to_user_dict["negFeedback"] = "Modify the plan"
+        plan_to_user_dict["planId"] = self._plan_manager.get_current_plan_id()
         await self._output_message_queue.put(
             TextMessage(
                 content=json.dumps(plan_to_user_dict, indent=4), source="UserProxyAgent"
@@ -731,7 +751,17 @@ class PlanningOrchestrator(BaseGroupChatManager):
         final_answer_response = await self._llm_create(
             self._orchestrator_model_client, context, cancellation_token
         )
-        message = TextMessage(content=final_answer_response, source=self._name)
+
+        message = TextMessage(
+            content=json.dumps(
+                {
+                    "content": final_answer_response,
+                    "planId": self._plan_manager.get_current_plan_id(),
+                },
+                indent=4,
+            ),
+            source="final_answer",
+        )
 
         self._plan_manager.add_summary_to_plan(
             summary=message.content,

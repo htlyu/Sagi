@@ -26,6 +26,9 @@ from Sagi.tools.stream_code_executor.stream_code_executor import (
     CodeFileMessage,
     StreamCodeExecutor,
 )
+from Sagi.tools.stream_code_executor.stream_docker_command_line_code_executor import (
+    StreamDockerCommandLineCodeExecutor,
+)
 
 
 class StreamCodeExecutorAgent(CodeExecutorAgent):
@@ -89,7 +92,7 @@ class StreamCodeExecutorAgent(CodeExecutorAgent):
             ):
                 if isinstance(result, CodeFileMessage):
                     yield result
-                else:
+                elif isinstance(result, CodeResult):
                     yield Response(
                         chat_message=TextMessage(
                             content=result.output,
@@ -180,13 +183,14 @@ class StreamCodeExecutorAgent(CodeExecutorAgent):
                 # CodeResult stores the exit code, stdout and stderr
                 # First yield the CodeFileMessage and then the CodeResult
                 if isinstance(result, CodeFileMessage):
+                    result.source = self.name
                     yield result
                     inner_messages.append(result)
                 elif isinstance(result, CodeResult):
                     # Step 9: Update model context with the code execution result
                     await model_context.add_message(
                         SystemMessage(
-                            content=f"The command {result.code_file} was executed with the following output: {result.output}",
+                            content=f"The command {result.code_file} was executed with the following output: {result.description}",
                             source=agent_name,
                         )
                     )
@@ -266,16 +270,20 @@ class StreamCodeExecutorAgent(CodeExecutorAgent):
         self, code_blocks: List[CodeBlock], cancellation_token: CancellationToken
     ) -> AsyncGenerator[CodeFileMessage | CodeResult, None]:
         # Execute the code blocks.
+        if isinstance(self._code_executor, StreamDockerCommandLineCodeExecutor):
+            await self._code_executor.start()
         async for result in self._code_executor.execute_code_blocks_stream(
             code_blocks, cancellation_token=cancellation_token
         ):
-            if isinstance(result, CodeFileMessage):
-                yield result
-            elif isinstance(result, CodeResult):
+            if isinstance(result, CodeResult):
                 if result.output.strip() == "":
                     # No output
-                    result.output = f"The script ran but produced no output to console. The POSIX exit code was: {result.exit_code}. If you were expecting output, consider revising the script to ensure content is printed to stdout."
+                    result.description = f"The script ran but produced no output to console. The POSIX exit code was: {result.exit_code}. If you were expecting output, consider revising the script to ensure content is printed."
                 elif result.exit_code != 0:
                     # Error
-                    result.output = f"The script ran, then exited with an error (POSIX exit code: {result.exit_code})\nIts output was:\n{result.output}"
+                    result.description = f"The script ran, then exited with an error (POSIX exit code: {result.exit_code})\nIts output was:\n{result.output}"
+                else:
+                    result.description = result.output
             yield result
+        if isinstance(self._code_executor, StreamDockerCommandLineCodeExecutor):
+            await self._code_executor.stop()
