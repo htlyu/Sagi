@@ -52,10 +52,10 @@ from Sagi.tools.stream_code_executor.stream_code_executor import (
 from Sagi.utils.prompt import (
     get_appended_plan_prompt,
     get_final_answer_prompt,
+    get_instruction_prompt,
     get_reflection_step_completion_prompt,
     get_step_triage_prompt,
 )
-from Sagi.utils.prompt_templates import build_final_prompt
 from Sagi.workflows.plan_manager import PlanManager
 
 trace_logger = logging.getLogger(TRACE_LOGGER_NAME)
@@ -569,14 +569,14 @@ class PlanningOrchestrator(BaseGroupChatManager):
 
         # 4) Assemble the final prompt
 
-        final_prompt = build_final_prompt(refined_context, instruction_or_question)
+        instruction_prompt = get_instruction_prompt(refined_context, instruction_or_question)
 
-        final_prompt = (
+        instruction_prompt = (
             f"{refined_context}\n\n" f"=== Instruction ===\n{instruction_or_question}"
         )
 
         message = TextMessage(
-            content=final_prompt,
+            content=instruction_prompt,
             source=self._name,
         )
         self._plan_manager.add_message_to_step(

@@ -4,19 +4,13 @@ import uuid
 from collections import OrderedDict
 from typing import Dict, List, Literal, Optional, Tuple
 
+from Sagi.utils.prompt import get_code_executor_prompt, get_current_subtask_section, get_data_collector_prompt, get_default_execution_prompt, get_previous_results_section, get_relevance_filter_prompt
 from autogen_agentchat.messages import BaseAgentEvent, BaseChatMessage, BaseMessage
 from pydantic import BaseModel, Field
 from autogen_ext.models.openai import OpenAIChatCompletionClient
 from autogen_core.models import UserMessage
 
 
-from Sagi.utils.prompt_templates import (
-    DEFAULT_PROMPT,
-    PROMPT_TEMPLATES,
-    build_filter_prompt,
-    build_shared_section,
-    build_step_section,
-)
 
 
 class Step(BaseModel):
@@ -839,7 +833,7 @@ class PlanManager:
         """
         # Construct the prompt used for filtering
         numbered = "\n".join(f"{i+1}. {s}" for i, s in enumerate(summaries))
-        filter_prompt = build_filter_prompt(numbered, task)
+        filter_prompt = get_relevance_filter_prompt(numbered=numbered, task=task)
 
         model_client = OpenAIChatCompletionClient(
             model="gpt-4o-mini",
@@ -867,6 +861,7 @@ class PlanManager:
         ]
 
     async def build_prompt_for_step(self, step_id: str, agent_role: str) -> str:
+        """Builds the LLM prompt for a given step and agent role."""
         plan = self._current_plan
         if plan is None:
             raise ValueError("No active plan")
@@ -874,15 +869,27 @@ class PlanManager:
         if not step:
             raise ValueError(f"Step '{step_id}' not found")
 
-        # Retrieve all historical summary texts
+        # Retrieve and filter summaries
         all_summaries = list(plan.shared_context.values())
-
-        # Perform on-the-fly filtering to extract the most relevant summaries
         relevant = await self.filter_summaries_with_llm(all_summaries, step.content)
 
-        shared_section = build_shared_section(relevant)
-        step_section = build_step_section(step)
+        shared_section = get_previous_results_section(relevant_summaries=relevant)
+        step_section = get_current_subtask_section(step=step)
 
-        # Fill in the final template
-        template = PROMPT_TEMPLATES.get(agent_role, DEFAULT_PROMPT)
-        return template.format(shared_section=shared_section, step_section=step_section)
+        # Dispatch to the correct prompt generator
+        if agent_role == "DataCollector":
+            return get_data_collector_prompt(
+                shared_section=shared_section,
+                step_section=step_section,
+                step_content=step.content,
+            )
+        elif agent_role == "CodeExecutor":
+            return get_code_executor_prompt(
+                shared_section=shared_section,
+                step_section=step_section,
+            )
+        else:
+            return get_default_execution_prompt(
+                shared_section=shared_section,
+                step_section=step_section,
+            )
