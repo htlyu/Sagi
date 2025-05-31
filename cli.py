@@ -98,8 +98,15 @@ if not DB_URL:
     raise RuntimeError("Environment variable POSTGRES_URL_NO_SSL_DEV is not set!")
 
 
+_already_shutting_down = False
+
+
 async def shutdown(db: Database, session_id: str, team):
-    """Save state and close DB on shutdown."""
+    global _already_shutting_down
+    if _already_shutting_down:
+        return
+    _already_shutting_down = True
+
     try:
         logging.info(f"Saving state for session {session_id} before shutdown...")
         await db.save_team_state(session_id, team)
@@ -108,8 +115,6 @@ async def shutdown(db: Database, session_id: str, team):
     finally:
         await db.close()
         logging.info("Database connection closed.")
-        loop = asyncio.get_event_loop()
-        loop.stop()
 
 
 def register_signal_handlers(db: Database, session_id: str, team):

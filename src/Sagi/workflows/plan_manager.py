@@ -845,7 +845,9 @@ class PlanManager:
         # Send the request and receive the full reply
         from Sagi.workflows.planning import PlanningWorkflow
 
-        result = await PlanningWorkflow.orchestrator_model_client.create(messages)
+        workflow = PlanningWorkflow("src/Sagi/workflows/planning.toml")
+
+        result = await workflow.orchestrator_model_client.create(messages)
         text = result.content.strip()
 
         try:

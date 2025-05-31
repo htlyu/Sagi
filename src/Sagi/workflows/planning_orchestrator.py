@@ -423,7 +423,9 @@ class PlanningOrchestrator(BaseGroupChatManager):
         # Call the model and get the completion
         from Sagi.workflows.planning import PlanningWorkflow
 
-        result = await PlanningWorkflow.orchestrator_model_client.create(
+        workflow = PlanningWorkflow("src/Sagi/workflows/planning.toml")
+
+        result = await workflow.orchestrator_model_client.create(
             messages=[system_prompt, user_prompt], cancellation_token=cancellation_token
         )
 
@@ -571,7 +573,8 @@ class PlanningOrchestrator(BaseGroupChatManager):
         # 4) Assemble the final prompt
 
         instruction_prompt = get_instruction_prompt(
-            refined_context, instruction_or_question
+            refined_context=refined_context,
+            instruction_or_question=instruction_or_question,
         )
 
         instruction_prompt = (
