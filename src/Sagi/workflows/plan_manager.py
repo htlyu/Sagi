@@ -187,6 +187,18 @@ class Plan(BaseModel):
         else:
             raise ValueError(f"Step with step_id {step_id} not found")
 
+    def get_messages_by_group_id(
+        self, group_id: str
+    ) -> List[BaseAgentEvent | BaseChatMessage]:
+        """Retrieve messages from all steps that belong to the specified group."""
+
+        return [
+            msg
+            for step in self.steps.values()
+            if step.group_id == group_id
+            for msg in step.messages
+        ]
+
     def add_summary_to_plan(self, summary: str) -> None:
         """
         Add a summary to the plan.
@@ -630,6 +642,16 @@ class PlanManager:
         else:
             raise ValueError("No running plan")
 
+    def get_messages_by_group_id(
+        self, group_id: str
+    ) -> List[BaseAgentEvent | BaseChatMessage]:
+        """Get messages from all steps belonging to the specified group."""
+
+        if self._current_plan:
+            return self._current_plan.get_messages_by_group_id(group_id)
+        else:
+            raise ValueError("No running plan")
+
     def get_messages_of_current_step(self) -> List[BaseAgentEvent | BaseChatMessage]:
         """
         Get the messages of the current step.
@@ -641,6 +663,16 @@ class PlanManager:
         if current_step is None:
             return []
         return self.get_messages_by_step_id(current_step[0])
+
+    def get_messages_of_current_group(self) -> List[BaseAgentEvent | BaseChatMessage]:
+        """Get messages of all steps within the group of the current step."""
+
+        current_step = self.get_current_step()
+        if current_step is None or not self._current_plan:
+            return []
+        step_id, _ = current_step
+        group_id = self._current_plan.steps[step_id].group_id
+        return self.get_messages_by_group_id(group_id)
 
     def get_messages_of_current_plan(self) -> List[BaseAgentEvent | BaseChatMessage]:
         """

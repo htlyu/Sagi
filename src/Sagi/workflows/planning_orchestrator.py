@@ -441,7 +441,7 @@ class PlanningOrchestrator(BaseGroupChatManager):
             current_step_id, current_step_content = current_step
 
         context = self.messages_to_context(
-            self._plan_manager.get_messages_of_current_step()
+            self._plan_manager.get_messages_of_current_group()
         )
         filtered_context = [
             msg
