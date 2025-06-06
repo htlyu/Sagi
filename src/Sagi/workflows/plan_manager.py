@@ -19,6 +19,7 @@ class Step(BaseModel):
         state (Literal["pending", "completed", "failed", "in_progress"]): The current state of the step
         messages (List[BaseAgentEvent | BaseChatMessage]): The conversation messages associated with executing this step
         reflection (Optional[str]): The reflection after the step is completed
+        template_id (Optional[str]): The template ID of the step
     """
 
     step_id: str
@@ -28,6 +29,7 @@ class Step(BaseModel):
     state: Literal["pending", "completed", "failed", "in_progress"]
     reflection: Optional[str]
     messages: List[BaseAgentEvent | BaseChatMessage]
+    template_id: Optional[str]
 
     def dump(self) -> Dict:
         """
@@ -45,6 +47,7 @@ class Step(BaseModel):
             "reflection": self.reflection,
             "messages": [msg.dump() for msg in self.messages] if self.messages else [],
             # Messages sent by the Orchestrator agent and tool agents
+            "template_id": self.template_id,
         }
 
     @classmethod
@@ -66,6 +69,7 @@ class Step(BaseModel):
             state=data.get("state", "pending"),
             reflection=data.get("reflection"),
             messages=[BaseMessage.load(msg) for msg in data.get("messages", [])],
+            template_id=data.get("template_id", None),
         )
 
 
@@ -80,6 +84,7 @@ class Plan(BaseModel):
         awaiting_confirmation (bool): Whether the plan awaits user confirmation.
         summary (Optional[str]): Summary of the plan.
         shared_context (OrderedDict[str, str]): A dictionary to dynamically store and update the concise result summary of each completed task group.
+        group_template_ids (Dict[str, Optional[str]]): A dictionary to store template IDs for each group.
     """
 
     plan_id: str
@@ -90,6 +95,7 @@ class Plan(BaseModel):
     shared_context: OrderedDict[str, str] = Field(
         default_factory=OrderedDict
     )  # Initialize as empty OrderedDict
+    group_template_ids: Dict[int, Optional[str]] = Field(default_factory=dict)
 
     def get_current_step(self) -> Optional[Tuple[str, str]]:
         """
@@ -233,6 +239,7 @@ class Plan(BaseModel):
                 - awaiting_confirmation: Boolean indicating if the plan is awaiting user confirmation
                 - summary: The plan summary text
                 - shared_context: Dictionary mapping task group IDs to their summaries
+                - group_template_ids: Dictionary mapping task group IDs to their template IDs
         """
         return {
             "plan_id": self.plan_id,
@@ -243,6 +250,7 @@ class Plan(BaseModel):
             "shared_context": dict(
                 self.shared_context
             ),  # Convert OrderedDict to regular dict for serialization
+            "group_template_ids": self.group_template_ids,
         }
 
     @classmethod
@@ -260,6 +268,7 @@ class Plan(BaseModel):
                 - awaiting_confirmation: Boolean indicating if the plan is awaiting user confirmation
                 - summary: The plan summary text
                 - shared_context: Dictionary mapping task group IDs to their summaries
+                - group_template_ids: Dictionary mapping task group IDs to their template IDs
 
         Returns:
             Plan: A new Plan object populated with the deserialized data
@@ -275,7 +284,11 @@ class Plan(BaseModel):
             shared_context=OrderedDict(
                 data.get("shared_context", {})
             ),  # Convert dict back to OrderedDict
+            group_template_ids=data.get("group_template_ids", {}),
         )
+
+    def get_group_template_id(self, group_id: int) -> Optional[str]:
+        return self.group_template_ids.get(group_id, None)
 
 
 class PlanHistory(BaseModel):
@@ -384,14 +397,14 @@ class PlanManager:
         """
         Set a new plan based on the task and model response.
 
-        This method creates a new Plan object with steps extracted from the model response.
+        This method creates a new Plan object with groups extracted from the model response.
         The plan is set as the current plan and marked as awaiting confirmation.
         Adds previous plan with human feedback to the feedback dictionary.
 
         Args:
             task (str): The task description for the plan.
-            model_response (str): JSON string containing the steps for the plan.
-                                 Expected format: {"steps": [{"name": "...", "description": "...",
+            model_response (str): JSON string containing the groups for the plan.
+                                 Expected format: {"groups": [{"name": "...", "description": "...",
                                  "data_collection_task": "...", "code_executor_task": "..."}]}
             human_feedback (str): Feedback provided by the user about the plan.
 
@@ -400,7 +413,11 @@ class PlanManager:
         """
 
         def append_step(
-            steps: Dict[str, Step], step_id: int, content: str, group_id: int
+            steps: Dict[str, Step],
+            step_id: int,
+            content: str,
+            group_id: int,
+            template_id: Optional[str],
         ):
             """
             Utility function to append a step to the plan.
@@ -419,6 +436,7 @@ class PlanManager:
                 state="pending",
                 reflection=None,
                 messages=[],
+                template_id=template_id,
             )
 
         def validate_model_response(model_response: str) -> None:
@@ -426,28 +444,28 @@ class PlanManager:
             Validate the model response format.
 
             Args:
-                model_response (str): JSON string containing the steps for the plan.
+                model_response (str): JSON string containing the groups for the plan.
             """
             try:
                 response_data = json.loads(model_response)
                 if not isinstance(response_data, dict):
                     raise ValueError("Model response must be a JSON object")
 
-                if "steps" not in response_data:
-                    raise ValueError("Model response must contain a 'steps' key")
+                if "groups" not in response_data:
+                    raise ValueError("Model response must contain a 'groups' key")
 
-                if not isinstance(response_data["steps"], list):
-                    raise ValueError("The 'steps' value must be a list")
+                if not isinstance(response_data["groups"], list):
+                    raise ValueError("The 'groups' value must be a list")
 
-                for i, step in enumerate(response_data["steps"]):
-                    if not isinstance(step, dict):
-                        raise ValueError(f"Step {i} must be a dictionary")
+                for i, group in enumerate(response_data["groups"]):
+                    if not isinstance(group, dict):
+                        raise ValueError(f"Group {i} must be a dictionary")
 
-                    if "name" not in step:
-                        raise ValueError(f"Step {i} must contain a 'name' key")
+                    if "name" not in group:
+                        raise ValueError(f"Group {i} must contain a 'name' key")
 
-                    if "description" not in step:
-                        raise ValueError(f"Step {i} must contain a 'description' key")
+                    if "description" not in group:
+                        raise ValueError(f"Group {i} must contain a 'description' key")
 
                     # data_collection_task and code_executor_task are optional
             except json.JSONDecodeError:
@@ -461,30 +479,31 @@ class PlanManager:
                 human_feedback
             )
         validate_model_response(model_response)
-        current_plan_steps = json.loads(model_response)["steps"]
+        current_plan_groups = json.loads(model_response)["groups"]
 
-        steps, step_id, group_id = {}, 0, 0
-        for step in current_plan_steps:
-            step_name = step["name"]
-            step_description = step["description"]
+        steps, group_template_ids, step_id, group_id = {}, {}, 0, 0
+        for group in current_plan_groups:
+            group_name = group["name"]
+            group_description = group["description"]
             tasks_added = False
-
-            if step.get("data_collection_task"):
-                content = step["data_collection_task"]
-                append_step(steps, step_id, content, group_id)
+            template_id = group.get("template_id", None)
+            if group.get("data_collection_task"):
+                content = group["data_collection_task"]
+                append_step(steps, step_id, content, group_id, template_id)
                 step_id += 1
                 tasks_added = True
-            if step.get("code_executor_task") and step.get(
+            if group.get("code_executor_task") and group.get(
                 "code_executor_task"
             ) not in ["N/A"]:
-                content = step["code_executor_task"]
-                append_step(steps, step_id, content, group_id)
+                content = group["code_executor_task"]
+                append_step(steps, step_id, content, group_id, template_id)
                 step_id += 1
                 tasks_added = True
             if not tasks_added:
-                content = f"{step_name}: {step_description}"
-                append_step(steps, step_id, content, group_id)
+                content = f"{group_name}: {group_description}"
+                append_step(steps, step_id, content, group_id, template_id)
                 step_id += 1
+            group_template_ids[group_id] = template_id
             group_id += 1
         # Create new plan
         self._current_plan = Plan(
@@ -493,6 +512,7 @@ class PlanManager:
             steps=steps,
             awaiting_confirmation=True,
             summary=None,
+            group_template_ids=group_template_ids,
         )
 
     def confirm_plan(self) -> None:
@@ -808,3 +828,9 @@ class PlanManager:
         """
         self._current_plan = None
         self._plan_history = PlanHistory(plan_history=[])
+
+    def get_group_template_id(self, group_id: int) -> Optional[str]:
+        if self._current_plan:
+            return self._current_plan.group_template_ids.get(group_id, None)
+        else:
+            raise ValueError("No running plan")
