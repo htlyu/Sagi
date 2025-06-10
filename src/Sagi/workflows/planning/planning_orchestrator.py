@@ -76,7 +76,7 @@ from Sagi.utils.prompt import (
     get_step_triage_prompt_cn,
     get_template_selection_prompt,
 )
-from Sagi.workflows.plan_manager import PlanManager
+from Sagi.workflows.planning.plan_manager import PlanManager
 
 trace_logger = logging.getLogger(TRACE_LOGGER_NAME)
 
