@@ -5,8 +5,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Type, TypeVar
 
 from autogen_agentchat.agents import AssistantAgent
-from autogen_agentchat.conditions import TextMessageTermination
-from autogen_agentchat.teams import RoundRobinGroupChat
 from autogen_core.models import ModelFamily, ModelInfo
 from autogen_ext.models.openai import OpenAIChatCompletionClient
 from autogen_ext.tools.mcp import (
@@ -126,7 +124,6 @@ class PlanningWorkflow:
         cls,
         config_path: str,
         team_config_path: str,
-        mode: str = "deep_research",
         template_work_dir: str | None = None,
         language: str = "en",
         countdown_timer: int = 60,  # time before the docker container is stopped
@@ -255,6 +252,7 @@ class PlanningWorkflow:
                 "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY"),
                 "OPENAI_BASE_URL": os.getenv("OPENAI_BASE_URL"),
                 "VOYAGE_API_KEY": os.getenv("VOYAGE_API_KEY"),
+                "DOC2X_API_KEY": os.getenv("DOC2X_API_KEY"),
             },
         )
 
@@ -273,7 +271,7 @@ class PlanningWorkflow:
             name="retrieval_agent",
             description="a retrieval agent that provides relevant information from the internal database.",
             model_client=self.single_tool_use_model_client,
-            tools=hirag_retrival_tools,  # type: ignore
+            tools=hirag_retrival_tools,
             system_message=(
                 get_rag_agent_prompt()
                 if language == "en"
@@ -285,7 +283,7 @@ class PlanningWorkflow:
         domain_specific_agent = AssistantAgent(
             name="prompt_template_expert",
             model_client=self.single_tool_use_model_client,
-            tools=domain_specific_tools,  # type: ignore
+            tools=domain_specific_tools,
             system_message=(
                 get_domain_specific_agent_prompt()
                 if language == "en"
@@ -348,21 +346,6 @@ class PlanningWorkflow:
             "retrieval_agent": rag_agent,
         }
 
-        # Select participants based on mode
-        if mode == "general":
-            self.team = RoundRobinGroupChat(
-                participants=[general_agent],
-                termination_condition=TextMessageTermination("general_agent"),
-            )
-            return self
-        elif mode == "web_search":
-            self.team = RoundRobinGroupChat(
-                participants=[surfer, general_agent],
-                termination_condition=TextMessageTermination("general_agent"),
-            )
-            return self
-
-        # deep_research mode: use all participants
         participants = []
         for member in team_members:
             if member in agent_mapping:

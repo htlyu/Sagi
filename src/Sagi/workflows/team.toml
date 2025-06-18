@@ -1,6 +1,7 @@
 [team]
   code_executor = "CodeExecutor"
   general_agent = "general_agent"
+  surfer = "web_search"
   rag_agent = "retrieval_agent"
 
 [options]
