@@ -466,9 +466,20 @@ def get_general_agent_prompt_cn() -> str:
     return "您是一个通用AI助手，为简单问题提供答案。回答使用中文。"
 
 
-def get_rag_agent_prompt() -> str:
+def get_user_intent_recognition_agent_prompt(language: str = "en") -> str:
+    """system prompt for user intent recognition agent"""
+    return {
+        "en": "You are a helpful AI assistant that recognizes user intent. The input is a chat history between a user and an AI assistant. Please describe the user's intent in one sentence based on the chat history.",
+    }[language]
+
+
+def get_rag_agent_prompt(language: str = "en") -> str:
     """system prompt for rag agent"""
-    return "You are a information retrieval agent that provides relevant information from the internal database."
+    return {
+        "en": "You are a information retrieval agent that provides relevant information from the internal database.",
+        "cn-s": "你是一个信息检索代理，从内部数据库中提供相关信息。",
+        "cn-t": "你是一個信息检索代理，從内部數據庫中提供相關信息。",
+    }[language]
 
 
 def get_rag_agent_prompt_cn() -> str:
@@ -496,6 +507,10 @@ def get_analyze_general_agent_prompt_cn() -> str:
     return "你是一个为问题提供答案的通用人工智能助手。下面将有多条消息。最后一个是提问，前面几个是历史对话。"
 
 
-def get_web_search_agent_prompt() -> str:
+def get_web_search_agent_prompt(language: str = "en") -> str:
     """system prompt for web search agent"""
-    return f"You are a web search agent that collects data and relevant information from the web. Today is {DATE_TIME}"
+    return {
+        "en": f"You are a web search agent that collects data and relevant information from the web. Today is {DATE_TIME}",
+        "cn-s": f"你是一个网页搜索代理，从网页中收集数据和相关信息。今天是{DATE_TIME}",
+        "cn-t": f"你是一個網頁搜索代理，從網頁中收集數據和相關信息。今天是{DATE_TIME}",
+    }[language]

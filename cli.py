@@ -4,8 +4,14 @@ import logging
 import os
 import threading
 import uuid
+from typing import Optional
 
-from autogen_agentchat.messages import BaseMessage, ToolCallSummaryMessage
+from autogen_agentchat.base import TaskResult
+from autogen_agentchat.messages import (
+    BaseChatMessage,
+    BaseMessage,
+    ToolCallSummaryMessage,
+)
 from autogen_agentchat.ui import Console
 from autogen_core.memory import MemoryContent
 from autogen_ext.tools.mcp import (
@@ -33,6 +39,9 @@ from Sagi.workflows.agents.multi_round import MultiRoundAgent
 from Sagi.workflows.general.general_chat import GeneralChatWorkflow
 from Sagi.workflows.planning.planning import PlanningWorkflow
 from Sagi.workflows.planning_html.planning_html import PlanningHtmlWorkflow
+from Sagi.workflows.question_prediction.question_prediction import (
+    QuestionPredictionWorkflow,
+)
 from Sagi.workflows.sagi_memory import SagiMemory
 
 # Create logging directory if it doesn't exist
@@ -44,6 +53,9 @@ DEFAULT_PLANNING_CONFIG_PATH = "src/Sagi/workflows/planning/config.toml"
 DEFAULT_GENERAL_CONFIG_PATH = "src/Sagi/workflows/general/config.toml"
 DEFAULT_PLANNING_HTML_CONFIG_PATH = "src/Sagi/workflows/planning_html/config.toml"
 DEFAULT_TEAM_PLANNING_HTML_CONFIG_PATH = "src/Sagi/workflows/planning_html/team.toml"
+DEFAULT_QUESTION_PREDICTION_CONFIG_PATH = (
+    "src/Sagi/workflows/question_prediction/config.toml"
+)
 
 
 def parse_args():
@@ -54,6 +66,9 @@ def parse_args():
     parser.add_argument("--team_config", default=DEFAULT_TEAM_CONFIG_PATH)
     parser.add_argument(
         "--team_html_config", default=DEFAULT_TEAM_PLANNING_HTML_CONFIG_PATH
+    )
+    parser.add_argument(
+        "--question_prediction_config", default=DEFAULT_QUESTION_PREDICTION_CONFIG_PATH
     )
     parser.add_argument(
         "--trace", action="store_true", help="Enable OpenTelemetry tracing"
@@ -275,12 +290,22 @@ async def main_cmd(args: argparse.Namespace):
     else:
         raise ValueError(f"Invalid mode: {args.mode}")
 
+    question_prediction_workflow: QuestionPredictionWorkflow = (
+        await QuestionPredictionWorkflow.create(
+            args.question_prediction_config,
+            language=args.language,
+            web_search=False,
+            hirag=False,
+        )
+    )
+
     try:
         while True:
             user_input = await get_input_async()
             if user_input.lower() in ("quit", "exit", "q"):
                 break
 
+            chat_history: Optional[TaskResult] = None
             if args.mode == "multi_rounds":
                 memory = SagiMemory(
                     chat_id=chat_id,
@@ -340,8 +365,21 @@ async def main_cmd(args: argparse.Namespace):
                 ]
                 await memory.add(messages)
             else:
-                await asyncio.create_task(Console(workflow.run_workflow(user_input)))
+                chat_history = await asyncio.create_task(
+                    Console(workflow.run_workflow(user_input))
+                )
                 await workflow.team.set_id_info("cli_dev", chat_id)
+            if chat_history is not None:
+                print(
+                    "\n###################### Question Prediction ######################"
+                )
+                chat_messages = [
+                    message
+                    for message in chat_history.messages
+                    if isinstance(message, BaseChatMessage)
+                ]
+                await question_prediction_workflow.reset()
+                await Console(question_prediction_workflow.run_workflow(chat_messages))
     except Exception as e:
         logging.error(f"Error: {e}")
     finally:
