@@ -181,7 +181,7 @@ async def get_input_async():
 
 
 async def main_cmd(args: argparse.Namespace):
-    engine = create_db_engine(os.getenv("POSTGRES_URL_NO_SSL_DEV") or "")
+    engine = await create_db_engine(os.getenv("POSTGRES_URL_NO_SSL_DEV") or "")
     session_maker = async_sessionmaker(engine, expire_on_commit=False)
     chat_id = str(uuid.uuid4())
     # Save the metadata of the chat
@@ -198,6 +198,10 @@ async def main_cmd(args: argparse.Namespace):
             system_prompt="You are a helpful assistant.",
             visibility="private",
         )
+
+    # Initialize variables for proper cleanup
+    workflow = None
+    session_manager = None
 
     if args.mode == "deep_research_executor":
         workflow = await PlanningWorkflow.create(
@@ -383,9 +387,28 @@ async def main_cmd(args: argparse.Namespace):
     except Exception as e:
         logging.error(f"Error: {e}")
     finally:
-        await workflow.cleanup()
-        await engine.dispose()
-        logging.info("Workflow cleaned up.")
+        # Cleanup session manager first (for hirag mode)
+        if session_manager:
+            try:
+                await session_manager.close_all()
+                logging.info("MCP session manager cleaned up successfully.")
+            except Exception as session_error:
+                logging.error(f"Error cleaning up MCP session manager: {session_error}")
+
+        # Cleanup workflow if it exists
+        if workflow is not None:
+            try:
+                await workflow.cleanup()
+                logging.info("Workflow cleaned up successfully.")
+            except Exception as cleanup_error:
+                logging.error(f"Error during workflow cleanup: {cleanup_error}")
+
+        # Cleanup database engine
+        try:
+            await engine.dispose()
+            logging.info("Database engine disposed successfully.")
+        except Exception as db_error:
+            logging.error(f"Error disposing database engine: {db_error}")
 
 
 if __name__ == "__main__":
