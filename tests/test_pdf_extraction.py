@@ -1,6 +1,7 @@
 import os
 
 import pytest
+from autogen_ext.models.anthropic import AnthropicChatCompletionClient
 from autogen_ext.models.openai import OpenAIChatCompletionClient
 from dotenv import load_dotenv
 
@@ -12,10 +13,10 @@ from Sagi.tools.pdf_extraction.pdf_extraction import PDF_Extraction
 async def test_pdf_extraction_with_model():
     load_dotenv()
 
-    api_key = os.getenv("OPENAI_API_KEY")
-    base_url = os.getenv("OPENAI_BASE_URL")
+    api_key = os.getenv("LLM_API_KEY")
+    base_url = os.getenv("LLM_BASE_URL")
     if api_key is None or base_url is None:
-        raise ValueError("OPENAI_API_KEY or OPENAI_BASE_URL is not set")
+        raise ValueError("LLM_API_KEY or LLM_BASE_URL is not set")
 
     # This is for testing purposes only, so the model here will be as small as possible and the result might not be perfect
     model_client = OpenAIChatCompletionClient(
@@ -24,6 +25,13 @@ async def test_pdf_extraction_with_model():
         api_key=api_key,
         max_tokens=16000,
     )
+
+    # model_client = AnthropicChatCompletionClient(
+    #     model="claude-sonnet-4-latest",
+    #     base_url=base_url.replace("/v1", ""),
+    #     auth_token=api_key,
+    #     max_tokens=16000,
+    # )
 
     await PDF_Extraction.extract_pdf_with_model(
         input_path="tests/test_pdf_extraction.pdf",
@@ -51,3 +59,13 @@ async def test_pdf_extraction_without_model():
         output_path="tests/storage/test_PDF_Extraction_without_model/editable_output.html",
         title="test_editable_pdf_extraction",
     )
+
+
+import asyncio
+
+if __name__ == "__main__":
+
+    async def main():
+        await test_pdf_extraction_with_model()
+
+    asyncio.run(main())
