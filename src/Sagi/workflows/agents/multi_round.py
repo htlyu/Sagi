@@ -3,6 +3,7 @@ from typing import Dict, List, Optional
 from autogen_agentchat.agents import AssistantAgent
 from autogen_core.models import ChatCompletionClient
 
+from Sagi.utils.prompt import get_multi_round_agent_system_prompt
 from Sagi.workflows.sagi_memory import SagiMemory
 
 
@@ -17,12 +18,13 @@ class MultiRoundAgent:
         memory: SagiMemory,
         language: str,
         model_client_stream: bool = True,
+        markdown_output: bool = False,
     ):
 
         self.memory = memory
         self.language = language
 
-        system_prompt = self._get_system_prompt()
+        system_prompt = self._get_system_prompt(markdown_output)
         self.agent = AssistantAgent(
             name="multi_round_agent",
             model_client=model_client,
@@ -31,13 +33,16 @@ class MultiRoundAgent:
             system_message=system_prompt,
         )
 
-    def _get_system_prompt(self):
-        system_prompt = {
+    def _get_system_prompt(self, markdown_output=False):
+        lang_prompt = {
             "en": "You are a helpful assistant that can answer questions and help with tasks. Please use English to answer.",
-            "cn-s": "你是一个乐于助人的助手，可以回答问题并帮助完成任务。请用简体中文回答",
-            "cn-t": "你是一個樂於助人的助手，可以回答問題並幫助完成任務。請用繁體中文回答",
+            "cn-s": "你是一个乐于助人的助手, 可以回答问题并帮助完成任务。请用简体中文回答",
+            "cn-t": "你是一個樂於助人的助手, 可以回答問題並幫助完成任務。請用繁體中文回答",
         }
-        return system_prompt.get(self.language, system_prompt["en"])
+        if markdown_output:
+            markdown_prompt = get_multi_round_agent_system_prompt()
+            return markdown_prompt.get(self.language, markdown_prompt["en"])
+        return lang_prompt.get(self.language, lang_prompt["en"])
 
     def run_workflow(
         self,
