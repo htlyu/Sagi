@@ -4,6 +4,7 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional
 from autogen_agentchat.agents import AssistantAgent
 from autogen_agentchat.conditions import TextMessageTermination
 from autogen_agentchat.messages import (
+    ModelClientStreamingChunkEvent,
     TextMessage,
     ToolCallSummaryMessage,
 )
@@ -152,6 +153,16 @@ class MultiRoundAgent:
 
                 if search_results:
                     try:
+                        display_text = self._format_search_results_for_display(
+                            search_results
+                        )
+
+                        if display_text:
+                            yield ModelClientStreamingChunkEvent(
+                                content=display_text,
+                                source="web_search_summary",
+                            )
+
                         analysis_result = await self._analyze_search_results(
                             search_results
                         )
@@ -160,17 +171,20 @@ class MultiRoundAgent:
                             analysis_result
                         )
 
-                        analysis_message = TextMessage(
-                            content=formatted_content, source="search_result_analyzer"
-                        )
-                        yield analysis_message
+                        if formatted_content:
+                            yield ModelClientStreamingChunkEvent(
+                                content=formatted_content,
+                                source="search_result_analyzer",
+                            )
 
                     except Exception as e:
-                        error_message = TextMessage(
-                            content=f"Search result analysis failed: {str(e)}. Original results are preserved above.",
+                        yield ModelClientStreamingChunkEvent(
+                            content=(
+                                "Search result analysis failed: "
+                                f"{str(e)}. Original results are preserved above."
+                            ),
                             source="search_result_analyzer",
                         )
-                        yield error_message
             else:
                 yield message
 
@@ -265,6 +279,59 @@ NOTE: Original search results are shown above. This analysis provides additional
 {separator}
 """
         return formatted_output
+
+    def _format_search_results_for_display(self, search_results: str) -> str:
+        if not search_results:
+            return ""
+
+        entries: List[Dict[str, str]] = []
+        current: Dict[str, str] = {}
+
+        for raw_line in search_results.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+
+            lower = line.lower()
+            if lower.startswith("title:"):
+                if current:
+                    entries.append(current)
+                    current = {}
+                current["title"] = line.split(":", 1)[1].strip()
+            elif lower.startswith("url:"):
+                current["url"] = line.split(":", 1)[1].strip()
+            elif lower.startswith("description:"):
+                current["description"] = line.split(":", 1)[1].strip()
+            elif lower.startswith("snippet:"):
+                current["description"] = line.split(":", 1)[1].strip()
+
+        if current:
+            entries.append(current)
+
+        if not entries:
+            return search_results.strip()
+
+        header_map = {
+            "cn-s": "## 🔎 网络搜索结果",
+            "cn-t": "## 🔎 網路搜尋結果",
+        }
+        header = header_map.get(self.language, "## 🔎 Web Search Results")
+
+        lines: List[str] = [header]
+        for index, item in enumerate(entries, 1):
+            title = item.get("title") or "Untitled"
+            url = item.get("url")
+            description = item.get("description")
+
+            if url:
+                lines.append(f"{index}. [{title}]({url})")
+            else:
+                lines.append(f"{index}. {title}")
+
+            if description:
+                lines.append(f"   - {description}")
+
+        return "\n".join(lines)
 
     async def cleanup(self):
         pass
