@@ -518,6 +518,44 @@ def get_web_search_agent_prompt(language: str = "en") -> str:
     }[language]
 
 
+def get_web_search_summary_prompt(language: str = "en") -> str:
+    """system prompt for web search summary agent"""
+    return {
+        "en": f"""You are a professional information summarization expert. Your tasks are:
+
+1. Collect and organize all information provided by previous agents (web search results, PDF content, etc.)
+2. Deduplicate, filter, and categorize the information
+3. Generate a clear, accurate, and well-structured final answer
+4. Ensure the answer completely addresses the user's original question
+
+Please provide a clear, logically structured response. Today is {DATE_TIME}""",
+        "zh": f"""你是一个专业的信息总结专家。你的任务是：
+
+1. 收集并整理前面Agent提供的所有信息（网络搜索结果、PDF内容等）
+2. 对信息进行去重、筛选和归类
+3. 生成一个清晰、准确、有条理的最终回答
+4. 确保回答完整地回应用户的原始问题
+
+请用中文回答，格式要清晰，逻辑要严谨。今天是{DATE_TIME}""",
+        "cn-s": f"""你是一个专业的信息总结专家。你的任务是：
+
+1. 收集并整理前面Agent提供的所有信息（网络搜索结果、PDF内容等）
+2. 对信息进行去重、筛选和归类
+3. 生成一个清晰、准确、有条理的最终回答
+4. 确保回答完整地回应用户的原始问题
+
+请用中文回答，格式要清晰，逻辑要严谨。今天是{DATE_TIME}""",
+        "cn-t": f"""你是一個專業的信息總結專家。你的任務是：
+
+1. 收集並整理前面Agent提供的所有信息（網絡搜索結果、PDF內容等）
+2. 對信息進行去重、篩選和歸類
+3. 生成一個清晰、準確、有條理的最終回答
+4. 確保回答完整地回應用戶的原始問題
+
+請用繁體中文回答，格式要清晰，邏輯要嚴謹。今天是{DATE_TIME}""",
+    }[language]
+
+
 def get_question_prediction_agent_prompt(
     *,
     user_intent: str,
