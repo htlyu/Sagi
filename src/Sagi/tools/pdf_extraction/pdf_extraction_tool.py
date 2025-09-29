@@ -4,15 +4,13 @@ import os
 import re
 import tempfile
 import uuid
-from typing import Any
 from urllib.parse import urlparse
 
 import httpx
 from autogen_core import CancellationToken
 from autogen_core.tools import BaseTool
-from pydantic import BaseModel
-
 from hirag_prod.loader import load_document
+from pydantic import BaseModel
 from resources.functions import get_envs
 from utils.file_utils import StorageServiceType, delete_file, upload_file_to_storage
 
@@ -122,9 +120,7 @@ class PDFExtractionTool(BaseTool):
                     document_meta=metadata,
                 )
                 if doc_md is None:
-                    return (
-                        "PDF content extraction failed: document parser returned no markdown"
-                    )
+                    return "PDF content extraction failed: document parser returned no markdown"
 
                 if not doc_md or not doc_md.text:
                     return "PDF content extraction failed: Unable to parse PDF content"
