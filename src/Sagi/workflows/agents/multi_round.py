@@ -69,7 +69,8 @@ class MultiRoundWebSearchAgentWorkflow:
                     "search agent outputs, identify the most relevant PDF URLs (i.e., "
                     "links ending with .pdf or pointing to known PDF documents), and use "
                     "the pdf_extractor tool on those links first. Only attempt non-PDF "
-                    "links if no PDF URLs are available."
+                    "links if no PDF URLs are available. Always copy URLs exactly as "
+                    "they appear, without rewriting, encoding, or decoding them."
                 ),
             )
             self.participant_list.append(pdf_extraction_agent)
