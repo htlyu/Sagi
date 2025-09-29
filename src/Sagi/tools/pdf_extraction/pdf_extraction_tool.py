@@ -44,6 +44,17 @@ class PDFExtractionTool(BaseTool):
             if not pdf_url.startswith(("http://", "https://")):
                 return "Error: Please provide a valid HTTP/HTTPS URL"
 
+            if re.search(r"\\u[0-9a-fA-F]{4}", pdf_url):
+                try:
+                    pdf_url = pdf_url.encode("utf-8", "backslashreplace").decode(
+                        "unicode_escape"
+                    )
+                except UnicodeDecodeError:
+                    logging.warning(
+                        "Failed to decode unicode escapes in PDF URL %s; using original",
+                        pdf_url,
+                    )
+
             async with httpx.AsyncClient(timeout=self.TIMEOUT_SECONDS) as client:
                 response = await client.get(pdf_url)
                 response.raise_for_status()
@@ -51,6 +62,14 @@ class PDFExtractionTool(BaseTool):
                 content_type = response.headers.get("content-type", "").lower()
                 if "pdf" not in content_type and not pdf_url.lower().endswith(".pdf"):
                     return "Error: URL is not a PDF file"
+
+                if not response.content.startswith(b"%PDF"):
+                    logging.info(
+                        "Rejected non-PDF content for URL %s despite content-type %s",
+                        pdf_url,
+                        content_type,
+                    )
+                    return "Error: Retrieved content is not a valid PDF document"
 
             with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
                 f.write(response.content)
@@ -163,6 +182,14 @@ class PDFExtractionTool(BaseTool):
 
         except httpx.TimeoutException:
             return "PDF download timeout: Please check network connection or try another PDF link"
+        except httpx.ConnectError as e:
+            detail = str(e) or e.__class__.__name__
+            if "CERTIFICATE_VERIFY_FAILED" in detail:
+                return (
+                    "PDF download failed: SSL certificate validation error. Try a different URL "
+                    "or access the site manually to verify the certificate."
+                )
+            return f"PDF download failed: {detail}"
         except httpx.HTTPStatusError as e:
             return f"PDF download failed: HTTP {e.response.status_code} - {e.response.reason_phrase}"
         except Exception as e:
