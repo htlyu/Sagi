@@ -60,6 +60,7 @@ class PDFExtractionTool(BaseTool):
 
             staged_cleanup = None
             processed_path = temp_path
+            MAX_STAGED_PAGES = 20
             try:
                 try:
                     from pypdf import PdfReader, PdfWriter
@@ -72,9 +73,9 @@ class PDFExtractionTool(BaseTool):
                             pdf_url,
                             total_pages,
                         )
-                        if total_pages > 20:
+                        if total_pages > MAX_STAGED_PAGES:
                             writer = PdfWriter()
-                            for page_index in range(20):
+                            for page_index in range(MAX_STAGED_PAGES):
                                 writer.add_page(reader.pages[page_index])
                             with tempfile.NamedTemporaryFile(
                                 suffix=".pdf", delete=False
@@ -85,7 +86,7 @@ class PDFExtractionTool(BaseTool):
                                 "Truncated PDF %s from %s to %s pages before staging",
                                 pdf_url,
                                 total_pages,
-                                20,
+                                MAX_STAGED_PAGES,
                             )
                         else:
                             logging.info(
@@ -97,8 +98,9 @@ class PDFExtractionTool(BaseTool):
                     logging.info("pypdf not installed; skipping PDF page limit")
                 except Exception:
                     logging.warning(
-                        "Failed to limit PDF %s to first 20 pages",
+                        "Failed to limit PDF %s to first %s pages",
                         pdf_url,
+                        MAX_STAGED_PAGES,
                         exc_info=True,
                     )
                     processed_path = temp_path
@@ -112,13 +114,17 @@ class PDFExtractionTool(BaseTool):
                     "private": True,
                     "uri": document_path,
                 }
-                loader_type = get_envs().LOAD_TYPE
+                loader_type = getattr(get_envs(), "LOAD_TYPE", None) or "docling"
                 _, doc_md = load_document(
                     document_path,
                     content_type,
-                    metadata,
-                    loader_type=loader_type,
+                    loader_type,
+                    document_meta=metadata,
                 )
+                if doc_md is None:
+                    return (
+                        "PDF content extraction failed: document parser returned no markdown"
+                    )
 
                 if not doc_md or not doc_md.text:
                     return "PDF content extraction failed: Unable to parse PDF content"

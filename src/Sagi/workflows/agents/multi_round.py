@@ -42,6 +42,16 @@ class MultiRoundWebSearchAgentWorkflow:
                 name="web_search_agent",
                 model_client=self.model_client,
                 tools=mcp_tools["web_search"],
+                system_message=(
+                    "You are a helpful AI assistant. Solve tasks using your tools. Reply "
+                    "with TERMINATE when the task has been completed.\n\n"
+                    "Additional context: You are a focused research agent. Prioritize "
+                    "official and authoritative sources and strive to surface direct PDF "
+                    "links when available, especially from government or legislative "
+                    "domains. If no PDF appears after reasonable refinements (e.g., "
+                    "adding filetype:pdf or similar filters), return the best supporting "
+                    "sources you find and note the absence of a PDF."
+                ),
                 model_client_stream=True,
                 max_retries=3,
             )
@@ -54,18 +64,15 @@ class MultiRoundWebSearchAgentWorkflow:
                 model_client=self.model_client,
                 tools=[PDFExtractionTool()],
                 model_client_stream=False,
-                system_message="You are a PDF extraction agent. Use the pdf_extractor tool to extract content from PDF URLs provided by other agents.",
+                system_message=(
+                    "You are a PDF extraction specialist. Carefully review the latest "
+                    "search agent outputs, identify the most relevant PDF URLs (i.e., "
+                    "links ending with .pdf or pointing to known PDF documents), and use "
+                    "the pdf_extractor tool on those links first. Only attempt non-PDF "
+                    "links if no PDF URLs are available."
+                ),
             )
             self.participant_list.append(pdf_extraction_agent)
-
-        # 3. Summary agent - integrates all results and returns final answer
-        web_search_summary_agent: AssistantAgent = AssistantAgent(
-            name="web_search_summary_agent",
-            model_client=self.model_client,
-            model_client_stream=True,
-            system_message=get_web_search_summary_prompt(language),
-        )
-        self.participant_list.append(web_search_summary_agent)
 
         return self
 
@@ -103,7 +110,10 @@ class MultiRoundAgent:
         self.mcp_tools = mcp_tools
         self.model_name = model_name
 
-        system_prompt = self._get_system_prompt(markdown_output)
+        system_prompt = self._get_system_prompt(
+            markdown_output=markdown_output,
+            enable_web_search=self.enable_web_search,
+        )
         self.agent = AssistantAgent(
             name="multi_round_agent",
             model_client=model_client,
@@ -112,7 +122,7 @@ class MultiRoundAgent:
             system_message=system_prompt,
         )
 
-    def _get_system_prompt(self, markdown_output=False):
+    def _get_system_prompt(self, markdown_output=False, enable_web_search=False):
         lang_prompt = {
             "en": "You are a helpful assistant that can answer questions and help with tasks. Please use English to answer.",
             "cn-s": "你是一个乐于助人的助手, 可以回答问题并帮助完成任务。请用简体中文回答",
@@ -121,6 +131,11 @@ class MultiRoundAgent:
         if markdown_output:
             markdown_prompt = get_multi_round_agent_system_prompt()
             return markdown_prompt.get(self.language, markdown_prompt["en"])
+        if enable_web_search:
+            summary_language = (
+                self.language if self.language in {"en", "zh", "cn-s", "cn-t"} else "en"
+            )
+            return get_web_search_summary_prompt(summary_language)
         return lang_prompt.get(self.language, lang_prompt["en"])
 
     def run_workflow(
