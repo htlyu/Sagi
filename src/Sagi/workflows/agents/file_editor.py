@@ -1,8 +1,10 @@
 from typing import Dict, List, Optional
 
 from autogen_agentchat.agents import AssistantAgent
-from autogen_core.models import ChatCompletionClient
+from autogen_core.models import ChatCompletionClient, UserMessage
+from resources.functions import get_hi_rag_client
 
+from Sagi.utils.prompt import get_file_edit_system_prompt, get_file_edit_task_prompt
 from Sagi.workflows.sagi_memory import SagiMemory
 
 
@@ -32,38 +34,57 @@ class FileEditAgent:
         )
 
     def _get_system_prompt(self):
-        system_prompt = {
-            "en": "You are a file editor assistant. You help users modify files based on their instructions. You will receive file content, highlighted text, and user instruction. Your task is to generate the appropriate edit for the highlighted text according to the user's instructions.",
-            "cn-s": "你是一个文件编辑助手。你帮助用户根据他们的指示修改文件。你将收到文件内容、高亮文本和用户指令。你的任务是根据用户的指令为高亮文本生成适当的编辑。",
-            "cn-t": "你是一個文件編輯助手。你幫助用戶根據他們的指示修改文件。你將收到文件內容、高亮文本和用戶指令。你的任務是根據用戶的指令為高亮文本生成適當的編輯。",
-        }
-        return system_prompt.get(self.language, system_prompt["en"])
 
-    def _get_task_description_template(self):
-        task_template = {
-            "en": "File Content: {file_input}\nHighlighted Text: {highlight_text}\nUser Instruction: {user_instruction}\nPlease modify the highlighted text section according to the user's instruction and provide ONLY the revised content without any additional explanation.",
-            "cn-s": "文件内容: {file_input}\n高亮文本: {highlight_text}\n用户指令: {user_instruction}\n请根据用户指令修改高亮文本部分, 并只返回修改后的内容, 不要任何额外解释。",
-            "cn-t": "文件內容: {file_input}\n高亮文本: {highlight_text}\n用戶指令: {user_instruction}\n請根據用戶指令修改高亮文本部分, 並只返回修改後的內容, 不要任何額外解釋。",
-        }
-        return task_template.get(self.language, task_template["en"])
+        return get_file_edit_system_prompt(language=self.language)
 
-    def run_workflow(
+    async def run_workflow(
         self,
         file_input: str,
         highlight_text: str,
         user_instruction: str,
+        workspace_id: Optional[str] = None,
+        knowledge_base_id: Optional[str] = None,
         experimental_attachments: Optional[List[Dict[str, str]]] = None,
     ):
 
-        task_template = self._get_task_description_template()
-        task_description = task_template.format(
+        # Check if RAG retrieval is needed using LLM
+        check_prompt = f"Based on this user instruction, does it require searching a knowledge base for additional context? Answer only YES or NO.\n\nUser instruction: {user_instruction}"
+        check_message = UserMessage(content=check_prompt, source="system")
+
+        result = await self.agent._model_client.create([check_message])
+        is_need_rag_retrieval = "YES" in result.content.upper()
+
+        rag_context = ""
+
+        if is_need_rag_retrieval and workspace_id and knowledge_base_id:
+            rag_instance = get_hi_rag_client()
+            await rag_instance.set_language(self.language)
+
+            ret = await rag_instance.query(
+                highlight_text,
+                workspace_id=workspace_id,
+                knowledge_base_id=knowledge_base_id,
+                summary=False,
+                translation=["en", "zh-TW", "zh"],
+            )
+
+            chunks = ret.get("chunks", [])
+            if chunks:
+                rag_context = "\n".join(
+                    f"[{i}] {chunk.get('text', '')}"
+                    for i, chunk in enumerate(chunks, start=1)
+                )
+
+        final_task_description = get_file_edit_task_prompt(
             file_input=file_input,
             highlight_text=highlight_text,
             user_instruction=user_instruction,
+            rag_context=rag_context,
+            language=self.language,
         )
 
         return self.agent.run_stream(
-            task=task_description,
+            task=final_task_description,
         )
 
     async def cleanup(self):
