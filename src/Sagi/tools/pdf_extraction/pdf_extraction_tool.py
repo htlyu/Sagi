@@ -212,9 +212,9 @@ class PDFExtractionTool(BaseTool):
         if prefix:
             object_key = f"{prefix}/{object_key}"
 
-        aws_bucket = getattr(envs, "AWS_BUCKET_NAME", None)
-        aws_access_key = getattr(envs, "AWS_ACCESS_KEY_ID", None)
-        aws_secret = getattr(envs, "AWS_SECRET_ACCESS_KEY", None)
+        aws_bucket = envs.AWS_BUCKET_NAME
+        aws_access_key = envs.AWS_ACCESS_KEY_ID
+        aws_secret = envs.AWS_SECRET_ACCESS_KEY
 
         if not all([aws_bucket, aws_access_key, aws_secret]):
             raise ValueError("AWS S3 credentials are required for PDF staging")
