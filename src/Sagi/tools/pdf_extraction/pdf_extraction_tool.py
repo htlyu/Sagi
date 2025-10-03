@@ -21,7 +21,9 @@ class PDFExtractionTool(BaseTool):
     MAX_CONTENT_LENGTH = 120000
     TIMEOUT_SECONDS = 30
 
-    def __init__(self):
+    def __init__(
+        self, workspace_id: str | None = None, knowledge_base_id: str | None = None
+    ):
         class PDFArgs(BaseModel):
             pdf_url: str
 
@@ -31,6 +33,8 @@ class PDFExtractionTool(BaseTool):
             name="pdf_extractor",
             description="Extract text content from PDF documents via URL",
         )
+        self.workspace_id = workspace_id
+        self.knowledge_base_id = knowledge_base_id
 
     async def run(self, args: BaseModel, cancellation_token: CancellationToken) -> str:
         pdf_url = None
@@ -131,6 +135,10 @@ class PDFExtractionTool(BaseTool):
                     "private": True,
                     "uri": document_path,
                 }
+                if self.workspace_id is not None and self.workspace_id != "":
+                    metadata["workspaceId"] = self.workspace_id
+                if self.knowledge_base_id is not None and self.knowledge_base_id != "":
+                    metadata["knowledgeBaseId"] = self.knowledge_base_id
                 loader_type = getattr(get_envs(), "LOAD_TYPE", None) or "docling"
                 _, doc_md = load_document(
                     document_path,
