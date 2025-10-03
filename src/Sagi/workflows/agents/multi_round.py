@@ -11,6 +11,8 @@ from Sagi.tools.pdf_extraction.pdf_extraction_tool import PDFExtractionTool
 from Sagi.tools.web_search_agent import WebSearchAgent
 from Sagi.utils.prompt import (
     get_multi_round_agent_system_prompt,
+    get_multi_round_pdf_extraction_agent_prompt,
+    get_multi_round_web_search_agent_prompt,
     get_web_search_summary_prompt,
 )
 from Sagi.workflows.sagi_memory import SagiMemory
@@ -42,19 +44,7 @@ class MultiRoundWebSearchAgentWorkflow:
                 name="web_search_agent",
                 model_client=self.model_client,
                 tools=mcp_tools["web_search"],
-                system_message=(
-                    "You are a helpful AI assistant. Solve tasks using your tools. Reply "
-                    "with TERMINATE when the task has been completed.\n\n"
-                    "Additional context: You are a focused research agent. Begin with "
-                    "broad, high-recall web queries to understand the topic. Only tighten "
-                    "queries with restrictive filters (e.g., filetype:pdf, site:) when "
-                    "initial results are insufficient. Prefer official and authoritative "
-                    "sources and call out direct PDF links when they are actually "
-                    "available, especially from government or legislative domains. If no "
-                    "PDF surfaces after these refinement attempts, return the most "
-                    "relevant supporting sources you found, describe the refinements you "
-                    "tried, and note that a PDF was not located."
-                ),
+                system_message=get_multi_round_web_search_agent_prompt(),
                 model_client_stream=True,
                 max_retries=3,
             )
@@ -67,14 +57,7 @@ class MultiRoundWebSearchAgentWorkflow:
                 model_client=self.model_client,
                 tools=[PDFExtractionTool()],
                 model_client_stream=False,
-                system_message=(
-                    "You are a PDF extraction specialist. Carefully review the latest "
-                    "search agent outputs, identify the most relevant PDF URLs (i.e., "
-                    "links ending with .pdf or pointing to known PDF documents), and use "
-                    "the pdf_extractor tool on those links first. Only attempt non-PDF "
-                    "links if no PDF URLs are available. Always copy URLs exactly as "
-                    "they appear, without rewriting, encoding, or decoding them."
-                ),
+                system_message=get_multi_round_pdf_extraction_agent_prompt(),
             )
             self.participant_list.append(pdf_extraction_agent)
 
