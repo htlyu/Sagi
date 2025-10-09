@@ -909,6 +909,16 @@ xhtml2pdf==0.2.17
 xlsxwriter==3.2.9
     # via python-pptx
 xxhash==3.5.0
+
+# for pdf-extraction
+pymupdf==1.26.3
+
+# for translation
+hanlp==2.1.2
+opencc==1.1.9
+
+# for sentry analytics
+sentry-sdk==2.40.0
     # via
     #   sagi (pyproject.toml)
     #   hirag-prod
