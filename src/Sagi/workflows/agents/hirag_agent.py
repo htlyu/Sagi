@@ -162,9 +162,9 @@ class RagSummaryAgent:
             if cancellation_token and cancellation_token.is_cancelled():
                 raise asyncio.CancelledError()
 
-            tool_call_output = {
+            tool_call_output = set(
                 (chunk["fileName"], chunk["uri"]) for chunk in ret_raw["chunks"]
-            }
+            )
 
             yield ToolOutputAvailable(
                 output=RagSearchToolCallOutput(

@@ -101,11 +101,13 @@ class QuestionPredictionWorkflow:
         self,
         user_input: Sequence[BaseChatMessage],
         cancellation_token: Optional[CancellationToken] = None,
+        **kwargs: Any,
     ):
-        kwargs = {}
-        if cancellation_token is not None:
-            kwargs["cancellation_token"] = cancellation_token
-        return self.team.run_stream(task=user_input, **kwargs)
+        token = kwargs.pop("cancellation_token", None) or cancellation_token
+        extra_kwargs = {}
+        if token is not None:
+            extra_kwargs["cancellation_token"] = token
+        return self.team.run_stream(task=user_input, **extra_kwargs)
 
     def set_model(self, model_name: str) -> None:
         for model_client in self.model_client_dict.values():
