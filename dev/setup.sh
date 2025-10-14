@@ -33,6 +33,15 @@ start_docker_compose() {
     fi
     echo "docker-compose started successfully."
 
+    # install required packages in the container
+    echo "Installing required packages in the container..."
+    docker exec ${CONTAINER_NAME} bash -c "apt-get update && apt-get install -y python3 postgresql-plpython3-17 python3-rapidfuzz" || {
+        echo "Warning: Failed to install some packages. Container is still running."
+        echo "You may need to manually install packages or check package names."
+        return 0
+    }
+    echo "Packages installed successfully."
+
     # print container name
     echo "You may run \"docker exec -it ${CONTAINER_NAME} /bin/bash\" to enter the sagi container"
 }
