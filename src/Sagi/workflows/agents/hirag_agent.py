@@ -249,11 +249,11 @@ class RagSummaryAgent:
             if cancellation_token and cancellation_token.is_cancelled():
                 raise asyncio.CancelledError()
 
-            included_chunks, _ = chunks_to_reference_chunks(
+            included_chunks, _, _ = chunks_to_reference_chunks(
                 ret["chunks"], from_ofnil=False
             )
 
-            excluded_chunks, _ = chunks_to_reference_chunks(
+            excluded_chunks, _, _ = chunks_to_reference_chunks(
                 ret["outliers"], from_ofnil=False
             )
 
