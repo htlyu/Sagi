@@ -2,27 +2,24 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
-# Embedding service from HiRAG for generating embeddings
-from hirag_prod._llm import EmbeddingService, LocalEmbeddingService
+from api.schema import MultiRoundMemory
+from configs.functions import get_embedding_config
 from hirag_prod.tracing import traced
+from pgvector import HalfVector, Vector
+from pgvector.sqlalchemy import HALFVEC, VECTOR
+from resources.embedding_client import LocalEmbeddingService
+from resources.functions import get_embedding_service
 from sqlalchemy import delete, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from api.schema import MultiRoundMemory
-from resources.functions import get_envs
 from Sagi.utils.token_usage import count_tokens_messages
 
-EMBEDDING_SERVICE: Optional[Union[LocalEmbeddingService, EmbeddingService]] = None
-
-
-def get_memory_embedding_service():
-    global EMBEDDING_SERVICE
-    if not EMBEDDING_SERVICE:
-        if get_envs().EMBEDDING_SERVICE_TYPE == "local":
-            EMBEDDING_SERVICE = LocalEmbeddingService()
-        else:
-            EMBEDDING_SERVICE = EmbeddingService()
-    return EMBEDDING_SERVICE
+mmr_dim, mmr_use_halfvec = (
+    get_embedding_config().dimension,
+    get_embedding_config().use_half_vec,
+)
+mmr_vec = Union[HalfVector, Vector, List[float]]
+MMR_VEC = HALFVEC(mmr_dim) if mmr_use_halfvec else VECTOR(mmr_dim)
 
 
 async def saveMultiRoundMemory(
@@ -37,9 +34,7 @@ async def saveMultiRoundMemory(
 
     # Generate embedding for the content using HiRAG's embedding service
     try:
-        content_embedding = await get_memory_embedding_service().create_embeddings(
-            [content]
-        )
+        content_embedding = await get_embedding_service().create_embeddings([content])
         # Extract the embedding vector from the response
         embedding = content_embedding[0] if content_embedding else None
     except Exception as e:
@@ -125,7 +120,7 @@ async def getMultiRoundMemory(
     if query_text and context_window and model_name:
         try:
             # Generate embedding for the query text
-            query_embedding = await get_memory_embedding_service().create_embeddings(
+            query_embedding = await get_embedding_service().create_embeddings(
                 [query_text]
             )
             if query_embedding is None or len(query_embedding) == 0:
