@@ -39,6 +39,14 @@ def get_model_info(model_name: str) -> Dict[str, Any]:
             "output": ["text"],
             "stream": True,
         },
+        "gemini-2.5-pro": {
+            "provider": "google",
+            "max_tokens": 32768,
+            "context_window": 1000000,
+            "input": ["text", "image"],
+            "output": ["text"],
+            "stream": True,
+        },
         # Anthropic models
         # https://docs.anthropic.com/en/docs/about-claude/models/overview#model-comparison-table
         "claude-opus-4": {
@@ -111,6 +119,9 @@ def get_model_name_by_api_provider(api_provider: str, model_name: str) -> str:
         "gpt-4o": "gpt-4o",
         "gpt-4o-mini": "gpt-4o-mini",
         "gpt-4.1": "openai/gpt-4.1-2025-04-14",
+        "gpt-5": "openai/gpt-5",
+        "gemini-2.5-pro": "google/gemini-2.5-pro",
+        "grok-4": "xai/grok-4",
         "claude-opus-4": "anthropic/claude-opus-4",
         "claude-sonnet-4": "anthropic/claude-sonnet-4",
         "deepseek-r1": "deepseek/deepseek-r1",
@@ -122,6 +133,9 @@ def get_model_name_by_api_provider(api_provider: str, model_name: str) -> str:
         "gpt-4o": "chatgpt-4o-latest",
         "gpt-4o-mini": "gpt-4o-mini",
         "gpt-4.1": "gpt-4.1-2025-04-14",
+        "gpt-5": "gpt-5",
+        "gemini-2.5-pro": "gemini-2.5-pro",
+        "grok-4": "grok-4",
         "claude-opus-4": "claude-opus-4-20250514",
         "claude-sonnet-4": "claude-sonnet-4-20250514",
         "deepseek-r1": "deepseek-r1",
